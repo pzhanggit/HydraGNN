@@ -171,11 +171,13 @@ def get_head_indices(model, data):
     # head size for each sample
     total_size = y_loc[:, -1]
     head_index = []
+    # track the start loc of each sample
+    sample_start = [torch.sum(total_size[:isample]) for isample in range(batch_size)]
     for ihead in range(model.num_heads):
         _head_ind = []
         for isample in range(batch_size):
-            istart = sum(total_size[:isample]) + y_loc[isample, ihead]
-            iend = sum(total_size[:isample]) + y_loc[isample, ihead + 1]
+            istart = sample_start[isample] + y_loc[isample, ihead]
+            iend = sample_start[isample] + y_loc[isample, ihead + 1]
             [_head_ind.append(ind) for ind in range(istart, iend)]
         head_index.append(_head_ind)
 
