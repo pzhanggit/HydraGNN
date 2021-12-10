@@ -27,6 +27,7 @@ import os
 from torch.profiler import record_function
 import contextlib
 from unittest.mock import MagicMock
+from concurrent.futures import ThreadPoolExecutor
 
 
 def train_validate_test(
@@ -170,16 +171,16 @@ def get_head_indices(model, data):
     y_loc = data.y_loc
     # head size for each sample
     total_size = y_loc[:, -1]
-    head_index = []
+    head_index = [None] * model.num_heads
     # track the start loc of each sample
-    sample_start = [torch.sum(total_size[:isample]) for isample in range(batch_size)]
+    sample_start = torch.cumsum(total_size, dim=0) - total_size
     for ihead in range(model.num_heads):
         _head_ind = []
         for isample in range(batch_size):
             istart = sample_start[isample] + y_loc[isample, ihead]
             iend = sample_start[isample] + y_loc[isample, ihead + 1]
             [_head_ind.append(ind) for ind in range(istart, iend)]
-        head_index.append(_head_ind)
+        head_index[ihead] = _head_ind
 
     return head_index
 
@@ -203,12 +204,14 @@ def train(loader, model, opt, verbosity, profiler=None):
         profiler = contextlib.nullcontext(MagicMock(name="step"))
     with profiler as prof:
         for data in iterate_tqdm(loader, verbosity):
+            with record_function("get_head_indices"):
+                head_index = get_head_indices(model, data)
+                # with ThreadPoolExecutor(max_workers=1) as executor:
+                #    head_index = executor.submit(get_head_indices, model, data)
             with record_function("load"):
                 data = data.to(device)
             with record_function("zero_grad"):
                 opt.zero_grad()
-            with record_function("get_head_indices"):
-                head_index = get_head_indices(model, data)
             with record_function("forward"):
                 pred = model(data)
                 loss, tasks_rmse, tasks_nodes = model.loss_rmse(
@@ -237,6 +240,7 @@ def validate(loader, model, verbosity):
     model.eval()
     for data in iterate_tqdm(loader, verbosity):
         head_index = get_head_indices(model, data)
+        data = data.to(device)
 
         pred = model(data)
         error, tasks_rmse = model.loss_rmse(pred, data.y, head_index)
@@ -267,6 +271,7 @@ def test(loader, model, verbosity):
         ]
     for data in iterate_tqdm(loader, verbosity):
         head_index = get_head_indices(model, data)
+        data = data.to(device)
 
         pred = model(data)
         error, tasks_rmse = model.loss_rmse(pred, data.y, head_index)
