@@ -172,15 +172,15 @@ def get_head_indices(model, data):
     # head size for each sample
     total_size = y_loc[:, -1]
     head_index = [None] * model.num_heads
+    _head_ind = [None] * batch_size
     # track the start loc of each sample
     sample_start = torch.cumsum(total_size, dim=0) - total_size
     for ihead in range(model.num_heads):
-        _head_ind = []
         for isample in range(batch_size):
             istart = sample_start[isample] + y_loc[isample, ihead]
             iend = sample_start[isample] + y_loc[isample, ihead + 1]
-            [_head_ind.append(ind) for ind in range(istart, iend)]
-        head_index[ihead] = _head_ind
+            _head_ind[isample] = torch.arange(istart, iend)
+        head_index[ihead] = torch.cat(_head_ind, dim=0)
 
     return head_index
 
@@ -204,12 +204,14 @@ def train(loader, model, opt, verbosity, profiler=None):
         profiler = contextlib.nullcontext(MagicMock(name="step"))
     with profiler as prof:
         for data in iterate_tqdm(loader, verbosity):
+            with record_function("load"):
+                data = data.to(device)
             with record_function("get_head_indices"):
                 head_index = get_head_indices(model, data)
                 # with ThreadPoolExecutor(max_workers=1) as executor:
                 #    head_index = executor.submit(get_head_indices, model, data)
-            with record_function("load"):
-                data = data.to(device)
+            # with record_function("load"):
+            #    data = data.to(device)
             with record_function("zero_grad"):
                 opt.zero_grad()
             with record_function("forward"):
