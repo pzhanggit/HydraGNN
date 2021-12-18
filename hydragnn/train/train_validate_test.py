@@ -166,6 +166,74 @@ def train_validate_test(
     )
 
 
+def get_head_indices1(model, data):
+    """In data.y (the true value here), all feature variables for a mini-batch are concatenated together as a large list.
+    To calculate loss function, we need to know true value for each feature in every head.
+    This function is to get the feature/head index/location in the large list."""
+    batch_size = data.batch.max() + 1
+    y_loc = data.y_loc
+    # head size for each sample
+    total_size = y_loc[:, -1]
+    head_index = [None] * model.num_heads
+    _head_ind = [None] * batch_size
+    # track the start loc of each sample
+    sample_start = torch.cumsum(total_size, dim=0) - total_size
+    for ihead in range(model.num_heads):
+        for isample in range(batch_size):
+            istart = sample_start[isample] + y_loc[isample, ihead]
+            iend = sample_start[isample] + y_loc[isample, ihead + 1]
+            _head_ind[isample] = torch.arange(istart, iend)
+        head_index[ihead] = torch.cat(_head_ind, dim=0)
+
+    return head_index
+
+def get_head_indices2(model, data):
+    """In data.y (the true value here), all feature variables for a mini-batch are concatenated together as a large list.
+    To calculate loss function, we need to know true value for each feature in every head.
+    This function is to get the feature/head index/location in the large list."""
+    batch_size = data.batch.max() + 1
+    y_loc = data.y_loc
+    # head size for each sample
+    total_size = y_loc[:, -1]
+    head_index = [None] * model.num_heads
+    _head_ind = [None] * batch_size
+    # track the start loc of each sample
+    sample_start = torch.cumsum(total_size, dim=0) - total_size
+    sample_start = sample_start.view(-1,1)
+    start_mat = sample_start + y_loc[:,:-1]
+    end_mat = sample_start + y_loc[:,1:]
+    for ihead in range(model.num_heads):
+        for isample in range(batch_size):
+            _head_ind[isample] = torch.arange(start_mat[isample, ihead], end_mat[isample, ihead])
+        head_index[ihead] = torch.cat(_head_ind, dim=0)
+
+    return head_index
+
+def get_head_indices3(model, data):
+    """In data.y (the true value here), all feature variables for a mini-batch are concatenated together as a large list.
+    To calculate loss function, we need to know true value for each feature in every head.
+    This function is to get the feature/head index/location in the large list."""
+    batch_size = data.batch.max() + 1
+    y_loc = data.y_loc
+    # head size for each sample
+    total_size = y_loc[:, -1]
+    head_index = [None] * model.num_heads
+    _head_ind = [None] * batch_size
+    # track the start loc of each sample
+    sample_start = torch.cumsum(total_size, dim=0) - total_size
+    sample_start = sample_start.view(-1,1)
+    start_mat = sample_start + y_loc[:,:-1]
+    end_mat = sample_start + y_loc[:,1:]
+
+    ind_mat = torch.arange(0,end_mat[-1,-1])
+
+    for ihead in range(model.num_heads):
+        for isample in range(batch_size):
+            _head_ind[isample] = ind_mat[start_mat[isample, ihead]:end_mat[isample, ihead]]
+        head_index[ihead] = torch.cat(_head_ind, dim=0)
+
+    return head_index
+
 def get_head_indices(model, data):
     """In data.y (the true value here), all feature variables for a mini-batch are concatenated together as a large list.
     To calculate loss function, we need to know true value for each feature in every head.
@@ -203,7 +271,7 @@ def train(
             with record_function("zero_grad"):
                 opt.zero_grad()
             with record_function("get_head_indices"):
-                head_index = get_head_indices(model, data)
+                head_index = get_head_indices1(model, data)
             with record_function("forward"):
                 pred = model(data)
                 loss, tasks_rmse = model.loss_rmse(pred, data.y, head_index)
