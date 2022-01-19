@@ -53,7 +53,7 @@ def load_existing_model_config(model, config, path="./logs/"):
 
 
 def load_existing_model(model, model_name, path="./logs/"):
-    path_name = os.path.join(path, model_name, model_name + ".pk")
+    path_name = os.path.join(path, model_name + ".pk")
     state_dict = torch.load(path_name, map_location="cpu")
 
     if is_model_distributed(model):
