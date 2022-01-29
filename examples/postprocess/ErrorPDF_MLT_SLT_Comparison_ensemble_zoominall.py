@@ -32,7 +32,6 @@ CaseDir = os.path.join(
     os.path.dirname(__file__),
     "../../logs/MultitaskingPaper_sequential/summit_lsms_hydra",
 )
-
 caseslabel = [
     "energy",
     "charge",
@@ -59,7 +58,12 @@ title_labels = ["Mixing enthalpy", "Charge transfer", "Magnetic moment"]
 ######################################################################
 
 fig, axs = plt.subplots(1, 3, figsize=(14, 5))
-axins = axs[0].inset_axes([0.1, 0.5, 0.35, 0.4])
+axins = []
+for icol in range(3):
+    if icol == 1:
+        axins.append(axs[icol].inset_axes([0.02, 0.55, 0.35, 0.4]))
+    else:
+        axins.append(axs[icol].inset_axes([0.05, 0.55, 0.35, 0.4]))
 for ivar in range(3):
     var = caseslabel[ivar]
 
@@ -112,9 +116,6 @@ for ivar in range(3):
 
         rmse_mean = np.mean(np.asarray(rmse_runs))
         rmse_std = np.std(np.asarray(rmse_runs))
-        print(ihead, icase, ivar)
-        if ihead == 1 and icase == 3:
-            print(rmse_runs)
         print(title_labels[icol], line_labels[icase], rmse_mean, rmse_std)
 
         ic = isub  # icase // 3
@@ -140,34 +141,31 @@ for ivar in range(3):
         )
         ax.plot([0, 0], [-5, 65], ":", color="grey", linewidth=1.0, zorder=0)
         ################################################################################################################
-        if icol == 0:
-            axins.plot(
-                xnew,
-                pdf_runs_mean,
-                linelib[il],
-                color=colorlib[ic],
-                linewidth=2.0,
-                label=line_labels[icase],
-                zorder=50,
-            )
-            axins.fill_between(
-                xnew,
-                pdf_runs_mean - pdf_runs_std,
-                pdf_runs_mean + pdf_runs_std,
-                facecolor=colorlib[ic],
-                interpolate=True,
-                alpha=0.4,
-                zorder=10,
-            )
-            axins.plot([0, 0], [0, 65], ":", color="grey", linewidth=1.0, zorder=0)
-            axins.set_xlim(-0.008, 0.008)  # apply the x-limits
-            axins.set_ylim(30, 63)  # apply the y-limits
-            # axins.set_xticks([-0.01,0.0, 0.01])
-            # axins.set_xticklabels(['$10^{-5}$', '$10^0$'])
-            axins.set_yticklabels([])
-            axins.set_xticklabels([])
-            ax.indicate_inset_zoom(axins)
-            ################################################################################################################
+        axins[icol].plot(
+            xnew,
+            pdf_runs_mean,
+            linelib[il],
+            color=colorlib[ic],
+            linewidth=2.0,
+            label=line_labels[icase],
+            zorder=50,
+        )
+        axins[icol].fill_between(
+            xnew,
+            pdf_runs_mean - pdf_runs_std,
+            pdf_runs_mean + pdf_runs_std,
+            facecolor=colorlib[ic],
+            interpolate=True,
+            alpha=0.4,
+            zorder=10,
+        )
+        axins[icol].plot([0, 0], [0, 65], ":", color="grey", linewidth=1.0, zorder=0)
+        axins[icol].set_xlim(-0.008, 0.008)  # apply the x-limits
+        axins[icol].set_ylim(30, 63)  # apply the y-limits
+        axins[icol].set_yticklabels([])
+        axins[icol].set_xticklabels([])
+        ax.indicate_inset_zoom(axins[icol])
+        ################################################################################################################
 
     if icol == 0:
         ax.set_ylabel("PDF", rotation=90, fontsize=18)
@@ -184,8 +182,8 @@ for icol in range(3):
 fig.subplots_adjust(
     left=0.1, bottom=None, right=0.99, top=0.85, wspace=0.05, hspace=0.15
 )
-filenamepng = CaseDir + "/../PDFofError_SLT_MLT_ensemble.png"
+filenamepng = CaseDir + "/../PDFofError_SLT_MLT_ensemble_zoominall.png"
 plt.savefig(filenamepng, bbox_inches="tight")
-filenamepng = CaseDir + "/../PDFofError_SLT_MLT_ensemble.pdf"
+filenamepng = CaseDir + "/../PDFofError_SLT_MLT_ensemble_zoominall.pdf"
 plt.savefig(filenamepng, bbox_inches="tight")
 plt.close()

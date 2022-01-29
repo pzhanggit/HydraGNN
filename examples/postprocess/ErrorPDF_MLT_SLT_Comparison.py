@@ -28,7 +28,10 @@ from scipy.interpolate import make_interp_spline, BSpline
 plt.rcParams.update({"font.size": 16})
 #########################################################
 
-CaseDir = os.path.join(os.path.dirname(__file__), "../../logs/MultitaskingPaper")
+CaseDir = os.path.join(
+    os.path.dirname(__file__),
+    "../../logs/MultitaskingPaper_sequential/summit_lsms_hydra",
+)
 caseslabel = [
     "energy",
     "charge",
@@ -44,23 +47,21 @@ variable_case_dic = {
     "magnetic": [[2, 0], [4, 1], [5, 1], [6, 2]],
 }
 
-for irun in range(1,5):
+for irun in range(7, 13):
     error_list = [None] * len(caseslabel)
     pdf_list = [None] * len(caseslabel)
     xcen_list = [None] * len(caseslabel)
-    if not os.path.exists(CaseDir + "/PDFofError_SLT_MLT_"+str(irun)+".pkl"):
-        for icase in range(len(caseslabel)):
-            config_file = CaseDir + "/json_files/" + "lsms_"
+    if not os.path.exists(CaseDir + "/PDFofError_SLT_MLT_" + str(irun) + ".pkl"):
+        for icase in range(0, len(caseslabel)):
+            config_file = CaseDir + "/inputs/"
+            case_name = "lsms_"
             if icase > 2:
-                config_file += "multitask_"
-            config_file += caseslabel[icase] + ".json"
-            with open(config_file, "r") as f:
+                case_name += "multitask_"
+            case_name += caseslabel[icase]
+            with open(config_file + case_name + ".json", "r") as f:
                 config = json.load(f)
 
-            try:
-                os.environ["SERIALIZED_DATA_PATH"]
-            except:
-                os.environ["SERIALIZED_DATA_PATH"] = os.getcwd()
+            os.environ["SERIALIZED_DATA_PATH"] = CaseDir
 
             world_size, world_rank = setup_ddp()
 
@@ -76,8 +77,9 @@ for irun in range(1,5):
             )
 
             log_name = get_log_name_config(config)
+            model_name = case_name + "_" + str(irun)
             load_existing_model(
-                model, log_name, path=CaseDir + "/logs"+str(irun)+"/" + caseslabel[icase] + "/"
+                model, model_name, path=CaseDir + "/logs/" + model_name + "/"
             )
 
             (
@@ -103,12 +105,12 @@ for irun in range(1,5):
             xcen_list[icase] = xcen_heads
             pdf_list[icase] = pdfs_heads
         ######################################################################
-        with open(CaseDir + "/PDFofError_SLT_MLT_"+str(irun)+".pkl", "wb") as f:
+        with open(CaseDir + "/../PDFofError_SLT_MLT_" + str(irun) + ".pkl", "wb") as f:
             pickle.dump(error_list, f)
             pickle.dump(xcen_list, f)
             pickle.dump(pdf_list, f)
     else:
-        with open(CaseDir + "/PDFofError_SLT_MLT_"+str(irun)+".pkl", "rb") as f:
+        with open(CaseDir + "/../PDFofError_SLT_MLT_" + str(irun) + ".pkl", "rb") as f:
             error_list = pickle.load(f)
             xcen_list = pickle.load(f)
             pdf_list = pickle.load(f)
@@ -160,6 +162,6 @@ for irun in range(1,5):
     fig.subplots_adjust(
         left=0.1, bottom=None, right=0.99, top=0.85, wspace=0.18, hspace=0.15
     )
-    filenamepng = CaseDir + "/PDFofError_SLT_MLT_"+str(irun)+".png"
+    filenamepng = CaseDir + "/../PDFofError_SLT_MLT_" + str(irun) + ".png"
     plt.savefig(filenamepng, bbox_inches="tight")
     plt.close()

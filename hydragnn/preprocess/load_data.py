@@ -116,7 +116,7 @@ def load_train_val_test_sets(config):
 
     for dataset_name, raw_data_path in config["Dataset"]["path"].items():
         if raw_data_path.endswith(".pkl"):
-            files_dir = raw_data_path
+            files_dir = os.environ['SERIALIZED_DATA_PATH'] + "/" + raw_data_path
         else:
             files_dir = f"{os.environ['SERIALIZED_DATA_PATH']}/serialized_dataset/{config['Dataset']['name']}_{dataset_name}.pkl"
         # loading serialized data and recalculating neighbourhoods depending on the radius and max num of neighbours
