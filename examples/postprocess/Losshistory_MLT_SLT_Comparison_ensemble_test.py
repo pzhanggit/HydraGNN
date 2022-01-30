@@ -72,7 +72,7 @@ for ivar in range(3):
 
         train_runs = []
         test_runs = []
-        for irun in range(1, 11):
+        for irun in range(1, 13):
             case_name = "lsms_"
             if icase > 2:
                 case_name += "multitask_"

@@ -61,9 +61,9 @@ fig, axs = plt.subplots(1, 3, figsize=(14, 5))
 axins = []
 for icol in range(3):
     if icol == 1:
-        axins.append(axs[icol].inset_axes([0.02, 0.55, 0.35, 0.4]))
+        axins.append(axs[icol].inset_axes([0.02, 0.55, 0.3, 0.4]))
     else:
-        axins.append(axs[icol].inset_axes([0.05, 0.55, 0.35, 0.4]))
+        axins.append(axs[icol].inset_axes([0.08, 0.55, 0.25, 0.4]))
 for ivar in range(3):
     var = caseslabel[ivar]
 
@@ -79,7 +79,7 @@ for ivar in range(3):
         rmse_runs = []
         xcen_runs = []
         pdf_runs = []
-        for irun in range(1, 11):
+        for irun in range(1, 13):
             error_list = [None] * len(caseslabel)
             pdf_list = [None] * len(caseslabel)
             xcen_list = [None] * len(caseslabel)
@@ -139,7 +139,7 @@ for ivar in range(3):
             alpha=0.4,
             zorder=10,
         )
-        ax.plot([0, 0], [-5, 65], ":", color="grey", linewidth=1.0, zorder=0)
+        ax.plot([0, 0], [-5, 125], ":", color="grey", linewidth=1.0, zorder=0)
         ################################################################################################################
         axins[icol].plot(
             xnew,
@@ -159,9 +159,16 @@ for ivar in range(3):
             alpha=0.4,
             zorder=10,
         )
-        axins[icol].plot([0, 0], [0, 65], ":", color="grey", linewidth=1.0, zorder=0)
-        axins[icol].set_xlim(-0.008, 0.008)  # apply the x-limits
-        axins[icol].set_ylim(30, 63)  # apply the y-limits
+        axins[icol].plot([0, 0], [0, 125], ":", color="grey", linewidth=1.0, zorder=0)
+        axins[icol].set_xlim(-0.005, 0.005)  # apply the x-limits
+        if icol == 0:
+            axins[icol].set_xlim(-0.008, 0.008)  # apply the x-limits
+            axins[icol].set_ylim(45, 120)  # apply the y-limits
+        elif icol == 1:
+            axins[icol].set_ylim(75, 120)  # apply the y-limits
+        else:
+            axins[icol].set_ylim(60, 95)  # apply the y-limits
+
         axins[icol].set_yticklabels([])
         axins[icol].set_xticklabels([])
         ax.indicate_inset_zoom(axins[icol])
@@ -175,7 +182,7 @@ for ivar in range(3):
 
 for icol in range(3):
     axs[icol].legend(fontsize=16, loc="upper right")
-    axs[icol].set_ylim(-5, 65)
+    axs[icol].set_ylim(-5, 125)
     if icol > 0:
         axs[icol].set_yticklabels([])
 

@@ -67,7 +67,7 @@ for icase in [6, 3, 4, 5, 0, 1, 2]:
         ihead += 1
         ivar = head_dict[head]
         rmse_runs = []
-        for irun in range(1, 11):
+        for irun in range(1, 13):
             if os.path.exists(CaseDir + "/../PDFofError_SLT_MLT_" + str(irun) + ".pkl"):
                 with open(
                     CaseDir + "/../PDFofError_SLT_MLT_" + str(irun) + ".pkl", "rb"
@@ -79,8 +79,8 @@ for icase in [6, 3, 4, 5, 0, 1, 2]:
             err_rmse = error_list[icase][ihead]
             rmse_runs.append(err_rmse)
         # print (ihead, icase, ivar, head)
-        if head == "H":
-            print(rmse_runs)
+        # if head == "H":
+        #    print(rmse_runs)
         rmse_mean = np.mean(np.asarray(rmse_runs))
         rmse_std = np.std(np.asarray(rmse_runs))
         tab_string[ivar] = "${:.2e}".format(rmse_mean) + "\pm{:.2e}$".format(rmse_std)
@@ -90,7 +90,7 @@ for icase in [6, 3, 4, 5, 0, 1, 2]:
         # else:
         #    print("&{:.2e}".format(rmse_mean)+"$\pm${:.2e}".format(rmse_std))
 
-# if icase > 2:
-#     print("MTL, " + line_labels[icase]+"&"+"&".join(tab_string)+r"\\")
-# else:
-#     print("STL, " + line_labels[icase]+"&"+"&".join(tab_string)+r"\\")
+    if icase > 2:
+        print("MTL, " + line_labels[icase] + "&" + "&".join(tab_string) + r"\\")
+    else:
+        print("STL, " + line_labels[icase] + "&" + "&".join(tab_string) + r"\\")

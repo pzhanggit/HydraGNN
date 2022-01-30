@@ -75,7 +75,7 @@ for ivar in range(3):
         rmse_runs = []
         xcen_runs = []
         pdf_runs = []
-        for irun in range(1, 11):
+        for irun in range(1, 13):
             error_list = [None] * len(caseslabel)
             pdf_list = [None] * len(caseslabel)
             xcen_list = [None] * len(caseslabel)
@@ -138,7 +138,7 @@ for ivar in range(3):
             alpha=0.4,
             zorder=10,
         )
-        ax.plot([0, 0], [-5, 65], ":", color="grey", linewidth=1.0, zorder=0)
+        ax.plot([0, 0], [-5, 125], ":", color="grey", linewidth=1.0, zorder=0)
         ################################################################################################################
         if icol == 0:
             axins.plot(
@@ -159,9 +159,9 @@ for ivar in range(3):
                 alpha=0.4,
                 zorder=10,
             )
-            axins.plot([0, 0], [0, 65], ":", color="grey", linewidth=1.0, zorder=0)
+            axins.plot([0, 0], [0, 125], ":", color="grey", linewidth=1.0, zorder=0)
             axins.set_xlim(-0.008, 0.008)  # apply the x-limits
-            axins.set_ylim(30, 63)  # apply the y-limits
+            axins.set_ylim(45, 120)  # apply the y-limits
             # axins.set_xticks([-0.01,0.0, 0.01])
             # axins.set_xticklabels(['$10^{-5}$', '$10^0$'])
             axins.set_yticklabels([])
@@ -177,7 +177,7 @@ for ivar in range(3):
 
 for icol in range(3):
     axs[icol].legend(fontsize=16, loc="upper right")
-    axs[icol].set_ylim(-5, 65)
+    axs[icol].set_ylim(-5, 125)
     if icol > 0:
         axs[icol].set_yticklabels([])
 

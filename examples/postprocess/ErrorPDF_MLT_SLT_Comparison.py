@@ -47,7 +47,7 @@ variable_case_dic = {
     "magnetic": [[2, 0], [4, 1], [5, 1], [6, 2]],
 }
 
-for irun in range(7, 13):
+for irun in range(1, 13):
     error_list = [None] * len(caseslabel)
     pdf_list = [None] * len(caseslabel)
     xcen_list = [None] * len(caseslabel)

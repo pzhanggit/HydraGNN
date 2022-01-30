@@ -45,10 +45,7 @@ for irun in range(5, 6):
     fig, axs = plt.subplots(1, 3, figsize=(14, 7.0))  # 5))
     for icase in range(1):
         config_file = CaseDir + "/inputs/"
-        case_name = "lsms_"
-        if icase > 2:
-            case_name += "multitask_"
-        case_name += caseslabel[icase]
+        case_name = "lsms_multitask_" + caseslabel[icase]
         with open(config_file + case_name + ".json", "r") as f:
             config = json.load(f)
 

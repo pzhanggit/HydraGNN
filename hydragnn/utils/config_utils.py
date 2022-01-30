@@ -117,7 +117,11 @@ def normalize_output_config(config):
     if "denormalize_output" in var_config and var_config["denormalize_output"]:
         ###loading min/max values from input data file. Only one path is needed
         if list(config["Dataset"]["path"].values())[0].endswith(".pkl"):
-            dataset_path = list(config["Dataset"]["path"].values())[0]
+            dataset_path = (
+                os.environ["SERIALIZED_DATA_PATH"]
+                + "/"
+                + list(config["Dataset"]["path"].values())[0]
+            )
         else:
             if "total" in config["Dataset"]["path"].keys():
                 dataset_path = f"{os.environ['SERIALIZED_DATA_PATH']}/serialized_dataset/{config['Dataset']['name']}.pkl"
