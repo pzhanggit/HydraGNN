@@ -96,7 +96,10 @@ for irun in range(5, 6):
                 np.asarray(predicted_values[ihead]).squeeze() * (head_max - head_min)
                 + head_min
             )
-
+            ###free_energy_scaled_num_nodes is used in new runs########
+            if ihead==0:
+                head_true *= 32
+                head_pred *= 32
             ###############################
             nbin = 50
             hist2d, xbins_edge, ybins_edge = np.histogram2d(
