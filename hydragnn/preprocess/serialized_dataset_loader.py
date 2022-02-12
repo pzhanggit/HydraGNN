@@ -87,7 +87,7 @@ class SerializedDataLoader:
                 config["Variables_of_interest"]["output_index"],
                 data,
             )
-            self.__update_atom_features(
+            update_atom_features(
                 config["Variables_of_interest"]["input_node_features"], data
             )
 
@@ -100,19 +100,6 @@ class SerializedDataLoader:
             )
 
         return dataset
-
-    def __update_atom_features(self, atom_features: [AtomFeatures], data: Data):
-        """Updates atom features of a structure. An atom is represented with x,y,z coordinates and associated features.
-
-        Parameters
-        ----------
-        atom_features: [AtomFeatures]
-            List of features to update. Each feature is instance of Enum AtomFeatures.
-        data: Data
-            A Data object representing a structure that has atoms.
-        """
-        feature_indices = [i for i in atom_features]
-        data.x = data.x[:, feature_indices]
 
     def __stratified_sampling(self, dataset: [Data], subsample_percentage: float):
         """Given the dataset and the percentage of data you want to extract from it, method will
@@ -169,6 +156,20 @@ def get_radius_graph(config):
         loop=False,
         max_num_neighbors=config["max_neighbours"],
     )
+
+
+def update_atom_features(atom_features: [AtomFeatures], data: Data):
+    """Updates atom features of a structure. An atom is represented with x,y,z coordinates and associated features.
+
+    Parameters
+    ----------
+    atom_features: [AtomFeatures]
+        List of features to update. Each feature is instance of Enum AtomFeatures.
+    data: Data
+        A Data object representing a structure that has atoms.
+    """
+    feature_indices = [i for i in atom_features]
+    data.x = data.x[:, feature_indices]
 
 
 def update_predicted_values(type: list, index: list, data: Data):

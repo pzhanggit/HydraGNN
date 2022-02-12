@@ -9,6 +9,7 @@ from .load_data import (
 )
 from .serialized_dataset_loader import (
     SerializedDataLoader,
+    update_atom_features,
     update_predicted_values,
     get_radius_graph,
 )
