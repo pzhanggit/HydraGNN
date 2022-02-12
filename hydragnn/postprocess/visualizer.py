@@ -600,8 +600,10 @@ class Visualizer:
             task_loss_train = np.array(task_loss_train)
             task_loss_val = np.array(task_loss_val)
             task_loss_test = np.array(task_loss_test)
-            nrow = 2
-        fig, axs = plt.subplots(nrow, num_tasks, figsize=(16, 6 * nrow))
+            ncol = 3
+            nrow = 1 + ceil(num_tasks / ncol)
+
+        fig, axs = plt.subplots(nrow, ncol, figsize=(5 * ncol, 6 * nrow))
         axs = axs.flatten()
         ax = axs[0]
         ax.plot(total_loss_train, "-", label="train")
@@ -611,10 +613,10 @@ class Visualizer:
         ax.set_xlabel("Epochs")
         ax.set_yscale("log")
         ax.legend()
-        for iext in range(1, num_tasks):
+        for iext in range(1, ncol):
             axs[iext].axis("off")
         for ivar in range(task_loss_train.shape[1]):
-            ax = axs[num_tasks + ivar]
+            ax = axs[ncol + ivar]
             ax.plot(task_loss_train[:, ivar], label="train")
             ax.plot(task_loss_val[:, ivar], label="validation")
             ax.plot(task_loss_test[:, ivar], "--", label="test")
@@ -623,10 +625,10 @@ class Visualizer:
             ax.set_yscale("log")
             if ivar == 0:
                 ax.legend()
-        for iext in range(num_tasks + task_loss_train.shape[1], axs.size):
+        for iext in range(ncol + task_loss_train.shape[1], axs.size):
             axs[iext].axis("off")
         plt.subplots_adjust(
-            left=0.1, bottom=0.08, right=0.98, top=0.9, wspace=0.25, hspace=0.3
+            left=0.1, bottom=0.05, right=0.98, top=0.95, wspace=0.25, hspace=0.3
         )
         fig.savefig(f"./logs/{self.model_with_config_name}/history_loss.png")
         plt.close()
