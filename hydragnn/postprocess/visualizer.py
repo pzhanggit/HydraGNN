@@ -600,10 +600,10 @@ class Visualizer:
             task_loss_train = np.array(task_loss_train)
             task_loss_val = np.array(task_loss_val)
             task_loss_test = np.array(task_loss_test)
-            ncol = 3
+            ncol = ceil(np.sqrt(num_tasks))
             nrow = 1 + ceil(num_tasks / ncol)
 
-        fig, axs = plt.subplots(nrow, ncol, figsize=(5 * ncol, 6 * nrow))
+        fig, axs = plt.subplots(nrow, ncol, figsize=(5 * ncol, 5 * nrow))
         axs = axs.flatten()
         ax = axs[0]
         ax.plot(total_loss_train, "-", label="train")
