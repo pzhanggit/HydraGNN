@@ -174,6 +174,10 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
 
 # Run training with the given model and qm9 dataset.
 log_name = "qm9_test_" + inputfilesubstr
+
+# Enable print to log file.
+hydragnn.utils.setup_log(log_name)
+
 writer = hydragnn.utils.get_summary_writer(log_name)
 with open("./logs/" + log_name + "/config.json", "w") as f:
     json.dump(config, f)
