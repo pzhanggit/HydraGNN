@@ -197,7 +197,7 @@ hydragnn.train.train_validate_test(
     verbosity,
 )
 
-save_model(model, log_name)
+hydragnn.utils.save_model(model, log_name)
 ##################################################################################################################
 for ifeat in range(len(var_config["output_index"])):
     fig, axs = plt.subplots(1, 3, figsize=(15, 4.5))

@@ -628,7 +628,7 @@ class Visualizer:
         for iext in range(ncol + task_loss_train.shape[1], axs.size):
             axs[iext].axis("off")
         plt.subplots_adjust(
-            left=0.1, bottom=0.05, right=0.98, top=0.95, wspace=0.25, hspace=0.3
+            left=0.12, bottom=0.08, right=0.98, top=0.95, wspace=0.25, hspace=0.3
         )
         fig.savefig(f"./logs/{self.model_with_config_name}/history_loss.png")
         plt.close()
