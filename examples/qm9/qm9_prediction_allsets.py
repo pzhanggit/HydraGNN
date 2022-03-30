@@ -21,7 +21,8 @@ with open(input_filename, "r") as f:
     config = json.load(f)
 verbosity = config["Verbosity"]["level"]
 var_config = config["NeuralNetwork"]["Variables_of_interest"]
-
+var_config["graph_features_dim"] = [1]
+var_config["node_feature_dim"] = [1 for var in node_attribute_names]
 # Always initialize for multi-rank training.
 world_size, world_rank = hydragnn.utils.setup_ddp()
 ##################################################################################################################

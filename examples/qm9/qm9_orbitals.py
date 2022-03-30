@@ -22,6 +22,8 @@ var_config["output_names"] = [
     graph_feature_names[item] for ihead, item in enumerate(var_config["output_index"])
 ]
 var_config["input_node_feature_names"] = node_attribute_names
+var_config["graph_features_dim"] = [1]
+var_config["node_feature_dim"] = [1 for var in node_attribute_names]
 ymax_feature, ymin_feature, ymean_feature, ystd_feature = get_trainset_stat(
     trainset_statistics
 )

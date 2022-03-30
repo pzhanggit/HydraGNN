@@ -1,4 +1,4 @@
-import sys
+import sys, os
 import torch
 import pickle, csv
 
@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from torch_scatter import scatter
 from torch_geometric.data import Data
 import hydragnn
-
+from hydragnn.utils.distributed import get_comm_size_and_rank
 ##################################################################################################################
 ##################################################################################################################
 HAR2EV = 27.211386246
@@ -45,8 +45,46 @@ def datasets_load_gap(datafile):
     return smiles, yvals
 
 
+def splits_save(datafile, splitlistfile):
+    fileid_list = []
+    values_list = []
+    with open(datafile, "r") as file:
+        csvreader = csv.reader(file)
+        header = next(csvreader)
+        for row in csvreader:
+            fileid_list.append(row[0])
+    perc_train = 0.9
+    perc_val = (1 - perc_train) / 2
+    ntotal = len(fileid_list)
+    ntrain = int(ntotal * perc_train)
+    nval = int(ntotal * perc_val)
+    ntest = ntotal - ntrain - nval
+    print(ntotal, ntrain, nval, ntest)
+    randomlist = torch.randperm(ntotal)
+
+    idx_train_list = [fileid_list[ifile] for ifile in randomlist[:ntrain]]
+    idx_val_list = [fileid_list[ifile] for ifile in randomlist[ntrain : ntrain + nval]]
+    idx_test_list = [fileid_list[ifile] for ifile in randomlist[ntrain + nval :]]
+
+    _, rank = get_comm_size_and_rank()
+    if rank == 0:
+        with open(splitlistfile, "wb") as f:
+            pickle.dump(idx_train_list, f)
+            pickle.dump(idx_val_list, f)
+            pickle.dump(idx_test_list, f)
+
+    return idx_train_list, idx_val_list, idx_test_list
+
+
 def datasets_load(datafile, splitlistfile):
-    train_filelist, val_filelist, test_filelist = get_splitlists(splitlistfile)
+    if os.path.isfile(splitlistfile):
+        train_filelist, val_filelist, test_filelist = get_splitlists(splitlistfile)
+    else:
+        print("Generate new split since file not found: ", splitlistfile)
+        train_filelist, val_filelist, test_filelist = splits_save(
+            datafile, splitlistfile
+        )
+
     trainset = []
     valset = []
     testset = []
@@ -172,8 +210,9 @@ def generate_graphdata(idx, simlestr, ytarget, var_config=None):
         hydragnn.preprocess.update_predicted_values(
             var_config["type"],
             var_config["output_index"],
+            var_config["graph_features_dim"],
+            var_config["node_feature_dim"],
             data,
         )
-
     device = hydragnn.utils.get_device()
     return data.to(device)
