@@ -24,6 +24,8 @@ from hydragnn.train.train_validate_test import test
 import numpy as np
 import pickle
 from scipy.interpolate import make_interp_spline, BSpline
+import torch
+import torch.nn.functional as F
 
 plt.rcParams.update({"font.size": 16})
 #########################################################
@@ -46,12 +48,14 @@ variable_case_dic = {
     "charge": [[1, 0], [3, 1], [5, 0], [6, 1]],
     "magnetic": [[2, 0], [4, 1], [5, 1], [6, 2]],
 }
+tag=""
+tag="_Apr2022"
 
 for irun in range(1, 13):
     error_list = [None] * len(caseslabel)
     pdf_list = [None] * len(caseslabel)
     xcen_list = [None] * len(caseslabel)
-    if not os.path.exists(CaseDir + "/PDFofError_SLT_MLT_" + str(irun) + ".pkl"):
+    if not os.path.exists(CaseDir + "/PDFofError_SLT_MLT_" + str(irun) + tag + ".pkl"):
         for icase in range(0, len(caseslabel)):
             config_file = CaseDir + "/inputs/"
             case_name = "lsms_"
@@ -65,7 +69,7 @@ for irun in range(1, 13):
 
             world_size, world_rank = setup_ddp()
 
-            train_loader, val_loader, test_loader = dataset_loading_and_splitting(
+            train_loader, val_loader, test_loader, sampler_list = dataset_loading_and_splitting(
                 config=config
             )
 
@@ -90,6 +94,7 @@ for irun in range(1, 13):
             ) = test(test_loader, model, config["Verbosity"]["level"])
             xcen_heads = []
             pdfs_heads = []
+            rmse_head = []
             for ihead in range(model.num_heads):
                 pdf1d, bin_edges = np.histogram(
                     np.array(predicted_values[ihead]) - np.array(true_values[ihead]),
@@ -100,17 +105,19 @@ for irun in range(1, 13):
                 bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
                 xcen_heads.append(bin_centers)
                 pdfs_heads.append(pdf1d)
+                rmse_head.append(np.sqrt(np.mean((np.array(predicted_values[ihead])-np.array(true_values[ihead]))**2)))
 
-            error_list[icase] = error_rmse_task
+            #error_list[icase] = error_rmse_task
+            error_list[icase] = rmse_head
             xcen_list[icase] = xcen_heads
             pdf_list[icase] = pdfs_heads
         ######################################################################
-        with open(CaseDir + "/../PDFofError_SLT_MLT_" + str(irun) + ".pkl", "wb") as f:
+        with open(CaseDir + "/../PDFofError_SLT_MLT_" + str(irun) + tag + ".pkl", "wb") as f:
             pickle.dump(error_list, f)
             pickle.dump(xcen_list, f)
             pickle.dump(pdf_list, f)
     else:
-        with open(CaseDir + "/../PDFofError_SLT_MLT_" + str(irun) + ".pkl", "rb") as f:
+        with open(CaseDir + "/../PDFofError_SLT_MLT_" + str(irun)  + tag + ".pkl", "rb") as f:
             error_list = pickle.load(f)
             xcen_list = pickle.load(f)
             pdf_list = pickle.load(f)
@@ -162,6 +169,6 @@ for irun in range(1, 13):
     fig.subplots_adjust(
         left=0.1, bottom=None, right=0.99, top=0.85, wspace=0.18, hspace=0.15
     )
-    filenamepng = CaseDir + "/../PDFofError_SLT_MLT_" + str(irun) + ".png"
+    filenamepng = CaseDir + "/../PDFofError_SLT_MLT_" + str(irun) + tag + ".png"
     plt.savefig(filenamepng, bbox_inches="tight")
     plt.close()

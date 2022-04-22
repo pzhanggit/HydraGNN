@@ -60,6 +60,8 @@ head_dict = {"H": 0, "C": 1, "M": 2}
 
 xmin = 1
 xmax = -1
+tag=""
+tag="_Apr2022"
 for icase in [6, 3, 4, 5, 0, 1, 2]:
     ihead = -1
     tab_string = ["-", "-", "-"]
@@ -68,9 +70,9 @@ for icase in [6, 3, 4, 5, 0, 1, 2]:
         ivar = head_dict[head]
         rmse_runs = []
         for irun in range(1, 13):
-            if os.path.exists(CaseDir + "/../PDFofError_SLT_MLT_" + str(irun) + ".pkl"):
+            if os.path.exists(CaseDir + "/../PDFofError_SLT_MLT_" + str(irun) + tag + ".pkl"):
                 with open(
-                    CaseDir + "/../PDFofError_SLT_MLT_" + str(irun) + ".pkl", "rb"
+                    CaseDir + "/../PDFofError_SLT_MLT_" + str(irun) + tag + ".pkl", "rb"
                 ) as f:
                     error_list = pickle.load(f)
                     xcen_list = pickle.load(f)
