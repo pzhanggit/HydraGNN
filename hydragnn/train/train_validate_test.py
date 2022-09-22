@@ -130,7 +130,7 @@ def train_validate_test(
         val_loss, val_taskserr = validate(
             val_loader, model, verbosity, reduce_ranks=True
         )
-        test_loss, test_taskserr, true_values, predicted_values = test(
+        test_loss, test_taskserr, true_values, predicted_values, _ = test(
             test_loader,
             model,
             verbosity,
@@ -181,30 +181,30 @@ def train_validate_test(
 
     timer.stop()
 
-    if create_plots:
-        # reduce loss statistics across all processes
-        total_loss_train = reduce_values_ranks(total_loss_train)
-        total_loss_val = reduce_values_ranks(total_loss_val)
-        total_loss_test = reduce_values_ranks(total_loss_test)
-        task_loss_train = reduce_values_ranks(task_loss_train)
-        task_loss_val = reduce_values_ranks(task_loss_val)
-        task_loss_test = reduce_values_ranks(task_loss_test)
+    # reduce loss statistics across all processes
+    total_loss_train = reduce_values_ranks(total_loss_train)
+    total_loss_val = reduce_values_ranks(total_loss_val)
+    total_loss_test = reduce_values_ranks(total_loss_test)
+    task_loss_train = reduce_values_ranks(task_loss_train)
+    task_loss_val = reduce_values_ranks(task_loss_val)
+    task_loss_test = reduce_values_ranks(task_loss_test)
 
-        # At the end of training phase, do the one test run for visualizer to get latest predictions
-        test_loss, test_taskserr, true_values, predicted_values = test(
-            test_loader, model, verbosity
+    # At the end of training phase, do the one test run for visualizer to get latest predictions
+    test_rmse, test_taskserr, true_values, predicted_values, filenames_without_extension = test(
+        test_loader, model, verbosity
+    )
+
+    ##output predictions with unit/not normalized
+    if config["Variables_of_interest"]["denormalize_output"]:
+        true_values, predicted_values = output_denormalize(
+            config["Variables_of_interest"]["y_minmax"], true_values, predicted_values
         )
 
-        ##output predictions with unit/not normalized
-        if config["Variables_of_interest"]["denormalize_output"]:
-            true_values, predicted_values = output_denormalize(
-                config["Variables_of_interest"]["y_minmax"],
-                true_values,
-                predicted_values,
-            )
+    num_samples = int(len(true_values[0]) / model.module.head_dims[0])
 
     _, rank = get_comm_size_and_rank()
-    if create_plots and rank == 0:
+    """
+    if create_plots and (rank == 0):
         ######result visualization######
         visualizer.create_plot_global(
             true_values,
@@ -227,6 +227,44 @@ def train_validate_test(
             model.module.loss_weights,
             config["Variables_of_interest"]["output_names"],
         )
+    """
+
+    if rank == 0:
+        for isample in range(num_samples):
+            import matplotlib.pyplot as plt
+
+            plt.figure()
+            plt.plot(
+                true_values[0][
+                isample * model.module.head_dims[0]: (isample + 1) * model.module.head_dims[0]
+                ].to('cpu')
+            )
+            plt.plot(
+                predicted_values[0][
+                isample * model.module.head_dims[0]: (isample + 1) * model.module.head_dims[0]
+                ].to('cpu')
+            )
+            plt.title(filenames_without_extension[isample])
+            plt.draw()
+            plt.savefig(f"./logs/{model_with_config_name}/spectrum_" + str(isample))
+            plt.close()
+
+            textfile = open(
+                f"./logs/{model_with_config_name}/" + "true_value_" + filenames_without_extension[isample] + ".txt",
+                "w+")
+            for element in true_values[0][
+                           isample * model.module.head_dims[0]: (isample + 1) * model.module.head_dims[0]
+                           ]:
+                textfile.write(str(element[0]) + "\n")
+            textfile.close()
+
+            textfile = open(f"./logs/{model_with_config_name}/" + "predicted_value_" + filenames_without_extension[
+                isample] + ".txt", "w+")
+            for element in predicted_values[0][
+                           isample * model.module.head_dims[0]: (isample + 1) * model.module.head_dims[0]
+                           ]:
+                textfile.write(str(element[0]) + "\n")
+            textfile.close()
 
 
 def get_head_indices(model, data):
@@ -504,6 +542,7 @@ def test(loader, model, verbosity, reduce_ranks=True, return_samples=True):
     tasks_error = tasks_error / num_samples_local
     true_values = [[] for _ in range(model.module.num_heads)]
     predicted_values = [[] for _ in range(model.module.num_heads)]
+    filenames_without_extension = []
     if return_samples:
         for data in loader:
             head_index = get_head_indices(model, data)
@@ -515,6 +554,7 @@ def test(loader, model, verbosity, reduce_ranks=True, return_samples=True):
                 head_val = ytrue[head_index[ihead]]
                 true_values[ihead].append(head_val)
                 predicted_values[ihead].append(head_pre)
+            filenames_without_extension.extend(data.filename_without_extension)
         for ihead in range(model.module.num_heads):
             predicted_values[ihead] = torch.cat(predicted_values[ihead], dim=0)
             true_values[ihead] = torch.cat(true_values[ihead], dim=0)
@@ -527,4 +567,4 @@ def test(loader, model, verbosity, reduce_ranks=True, return_samples=True):
                 true_values[ihead] = gather_tensor_ranks(true_values[ihead])
                 predicted_values[ihead] = gather_tensor_ranks(predicted_values[ihead])
 
-    return test_error, tasks_error, true_values, predicted_values
+    return test_error, tasks_error, true_values, predicted_values, filenames_without_extension
