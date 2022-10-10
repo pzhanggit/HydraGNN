@@ -474,7 +474,9 @@ class Visualizer:
         save_plot=True,
     ):
         """Creates scatter plots for true and predicted values of vector variable varname."""
-
+        if head_dim > 3:
+            # FIXME: need to update for energy spectrum plot
+            return
         predicted_vec = np.reshape(np.asarray(predicted_values), (-1, head_dim))
         true_vec = np.reshape(np.asarray(true_values), (-1, head_dim))
         num_samples = true_vec.shape[0]

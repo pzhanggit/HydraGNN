@@ -106,7 +106,6 @@ class RawDataLoader:
             else False
         )
 
-
         assert len(self.node_feature_name) == len(self.node_feature_dim)
         assert len(self.node_feature_name) == len(self.node_feature_col)
         assert len(self.graph_feature_name) == len(self.graph_feature_dim)
@@ -196,7 +195,6 @@ class RawDataLoader:
             self.__normalize_dataset()
         elif self.standardize_input:
             self.__standardize_dataset()
-
 
         for serial_data_name, dataset_normalized in zip(
             self.serial_data_name_list, self.dataset_list
@@ -401,11 +399,13 @@ class RawDataLoader:
 
             data_object.pos = tensor(node_position_matrix)
             data_object.x = tensor(node_feature_matrix)
-            data_object.x = torch.nn.functional.one_hot(data_object.x.view(-1).to(torch.int64), num_classes=118)
+            data_object.x = torch.nn.functional.one_hot(
+                data_object.x.view(-1).to(torch.int64), num_classes=118
+            )
 
         filename_without_extension = os.path.splitext(filepath)[0]
-        index = filename_without_extension.rsplit('/',1)[1]
-        data_object.filename_without_extension = index
+        index = filename_without_extension.rsplit("/", 1)[1]
+        data_object.sample_id = int(index)
 
         # output files
         if os.path.exists(filename_without_extension + "_vis_inc_0K" + ".csv") != -1:
@@ -429,7 +429,6 @@ class RawDataLoader:
             data_object.y = tensor(g_feature)
 
         return data_object
-
 
     def __charge_density_update_for_LSMS(self, data_object: Data):
         """Calculate charge density for LSMS format
@@ -473,7 +472,6 @@ class RawDataLoader:
                 )
 
         return dataset
-
 
     def __standardize_dataset(self):
 
@@ -583,7 +581,6 @@ class RawDataLoader:
                         (self.std_node_feature[ifeat]),
                     )
                     n_index_start = n_index_end
-
 
     def __normalize_dataset(self):
 
