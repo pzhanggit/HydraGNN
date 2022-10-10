@@ -108,7 +108,7 @@ def train_validate_test(
                 train_loader, model, optimizer, verbosity, profiler=prof
             )
         val_loss, val_taskserr = validate(val_loader, model, verbosity)
-        test_loss, test_taskserr, true_values, predicted_values, _ = test(
+        test_loss, test_taskserr, true_values, predicted_values = test(
             test_loader,
             model,
             verbosity,
@@ -160,7 +160,7 @@ def train_validate_test(
     task_loss_test = reduce_values_ranks(task_loss_test)
 
     # At the end of training phase, do the one test run for visualizer to get latest predictions
-    test_rmse, test_taskserr, true_values, predicted_values, filenames_without_extension = test(
+    test_rmse, test_taskserr, true_values, predicted_values = test(
         test_loader, model, verbosity
     )
 
@@ -170,10 +170,7 @@ def train_validate_test(
             config["Variables_of_interest"]["y_minmax"], true_values, predicted_values
         )
 
-    num_samples = int(len(true_values[0]) / model.module.head_dims[0])
-
     _, rank = get_comm_size_and_rank()
-    """
     if create_plots and (rank == 0):
         ######result visualization######
         visualizer.create_plot_global(
@@ -197,44 +194,6 @@ def train_validate_test(
             model.module.loss_weights,
             config["Variables_of_interest"]["output_names"],
         )
-    """
-
-    if rank == 0:
-        for isample in range(num_samples):
-            import matplotlib.pyplot as plt
-
-            plt.figure()
-            plt.plot(
-                true_values[0][
-                isample * model.module.head_dims[0]: (isample + 1) * model.module.head_dims[0]
-                ].to('cpu')
-            )
-            plt.plot(
-                predicted_values[0][
-                isample * model.module.head_dims[0]: (isample + 1) * model.module.head_dims[0]
-                ].to('cpu')
-            )
-            plt.title(filenames_without_extension[isample])
-            plt.draw()
-            plt.savefig(f"./logs/{model_with_config_name}/spectrum_" + str(isample))
-            plt.close()
-
-            textfile = open(
-                f"./logs/{model_with_config_name}/" + "true_value_" + filenames_without_extension[isample] + ".txt",
-                "w+")
-            for element in true_values[0][
-                           isample * model.module.head_dims[0]: (isample + 1) * model.module.head_dims[0]
-                           ]:
-                textfile.write(str(element[0]) + "\n")
-            textfile.close()
-
-            textfile = open(f"./logs/{model_with_config_name}/" + "predicted_value_" + filenames_without_extension[
-                isample] + ".txt", "w+")
-            for element in predicted_values[0][
-                           isample * model.module.head_dims[0]: (isample + 1) * model.module.head_dims[0]
-                           ]:
-                textfile.write(str(element[0]) + "\n")
-            textfile.close()
 
 
 def get_head_indices(model, data):
@@ -419,7 +378,14 @@ def validate(loader, model, verbosity, reduce_ranks=True):
 
 
 @torch.no_grad()
-def test(loader, model, verbosity, reduce_ranks=True, return_samples=True):
+def test(
+    loader,
+    model,
+    verbosity,
+    reduce_ranks=True,
+    return_samples=True,
+    return_sampleid=False,
+):
 
     total_error = torch.tensor(0.0, device=get_device())
     tasks_error = torch.zeros(model.module.num_heads, device=get_device())
@@ -451,7 +417,12 @@ def test(loader, model, verbosity, reduce_ranks=True, return_samples=True):
                 head_val = ytrue[head_index[ihead]]
                 true_values[ihead].append(head_val)
                 predicted_values[ihead].append(head_pre)
-            filenames_without_extension.extend(data.filename_without_extension)
+            if return_sampleid:
+                filenames_without_extension.append(
+                    torch.tensor(
+                        [int(item) for item in data.filename_without_extension]
+                    )
+                )
         for ihead in range(model.module.num_heads):
             predicted_values[ihead] = torch.cat(predicted_values[ihead], dim=0)
             true_values[ihead] = torch.cat(true_values[ihead], dim=0)
@@ -464,4 +435,18 @@ def test(loader, model, verbosity, reduce_ranks=True, return_samples=True):
                 true_values[ihead] = gather_tensor_ranks(true_values[ihead])
                 predicted_values[ihead] = gather_tensor_ranks(predicted_values[ihead])
 
-    return test_error, tasks_error, true_values, predicted_values, filenames_without_extension
+    if return_sampleid:
+        filenames_without_extension = torch.cat(filenames_without_extension, dim=0)
+        if reduce_ranks:
+            filenames_without_extension = gather_tensor_ranks(
+                filenames_without_extension
+            )
+        return (
+            test_error,
+            tasks_error,
+            true_values,
+            predicted_values,
+            filenames_without_extension,
+        )
+    else:
+        return test_error, tasks_error, true_values, predicted_values
