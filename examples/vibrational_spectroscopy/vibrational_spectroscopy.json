@@ -61,6 +61,6 @@
     "Visualization": {
         "plot_init_solution": false,
         "plot_hist_solution": false,
-        "create_plots": true
+        "create_plots": false
     }
 }

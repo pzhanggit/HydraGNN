@@ -211,4 +211,68 @@ if __name__ == "__main__":
     hydragnn.utils.save_model(model, optimizer, log_name)
     hydragnn.utils.print_timers(verbosity)
 
+    (
+        test_rmse,
+        test_taskserr,
+        true_values,
+        predicted_values,
+        filenames_without_extension,
+    ) = hydragnn.train.test(test_loader, model, verbosity, return_sampleid=True)
+    num_samples = int(len(true_values[0]) / model.module.head_dims[0])
+    if rank == 0:
+        print(num_samples)
+        print(len(true_values[0]), model.module.head_dims[0])
+        print(len(filenames_without_extension))
+        for isample in range(num_samples):
+            import matplotlib.pyplot as plt
+
+            plt.figure()
+            plt.plot(
+                true_values[0][
+                    isample
+                    * model.module.head_dims[0] : (isample + 1)
+                    * model.module.head_dims[0]
+                ].to("cpu")
+            )
+            plt.plot(
+                predicted_values[0][
+                    isample
+                    * model.module.head_dims[0] : (isample + 1)
+                    * model.module.head_dims[0]
+                ].to("cpu")
+            )
+            plt.title(filenames_without_extension[isample])
+            plt.draw()
+            plt.savefig(f"./logs/{log_name}/spectrum_" + str(isample))
+            plt.close()
+
+            textfile = open(
+                f"./logs/{log_name}/"
+                + "true_value_"
+                + str(filenames_without_extension[isample].item())
+                + ".txt",
+                "w+",
+            )
+            for element in true_values[0][
+                isample
+                * model.module.head_dims[0] : (isample + 1)
+                * model.module.head_dims[0]
+            ]:
+                textfile.write(str(element[0]) + "\n")
+            textfile.close()
+
+            textfile = open(
+                f"./logs/{log_name}/"
+                + "predicted_value_"
+                + str(filenames_without_extension[isample].item())
+                + ".txt",
+                "w+",
+            )
+            for element in predicted_values[0][
+                isample
+                * model.module.head_dims[0] : (isample + 1)
+                * model.module.head_dims[0]
+            ]:
+                textfile.write(str(element[0]) + "\n")
+            textfile.close()
     sys.exit(0)
