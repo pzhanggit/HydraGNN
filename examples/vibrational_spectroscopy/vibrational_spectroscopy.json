@@ -4,10 +4,10 @@
     },
     "Dataset": {
         "name": "YQ",
-        "path": {"total": "./YQ_pubchem"},
+        "path": {"total": "./dataset/YQ_qm8_accurate_clean"},
         "format": "YQ",
         "compositional_stratified_splitting": false,
-        "rotational_invariance": true,
+        "rotational_invariance": false,
         "node_features": {
             "name": ["num_of_protons"],
             "dim": [1],
@@ -51,7 +51,10 @@
         "Training": {
             "num_epoch": 150,
             "perc_train": 0.95,
-            "learning_rate": 1e-3,
+            "Optimizer": {
+                "type": "AdamW",
+                "learning_rate": 1e-3
+            },
             "batch_size": 64
         }
     },
