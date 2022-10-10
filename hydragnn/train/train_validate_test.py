@@ -405,7 +405,7 @@ def test(
     tasks_error = tasks_error / num_samples_local
     true_values = [[] for _ in range(model.module.num_heads)]
     predicted_values = [[] for _ in range(model.module.num_heads)]
-    filenames_without_extension = []
+    sample_ids = []
     if return_samples:
         for data in loader:
             head_index = get_head_indices(model, data)
@@ -418,11 +418,7 @@ def test(
                 true_values[ihead].append(head_val)
                 predicted_values[ihead].append(head_pre)
             if return_sampleid:
-                filenames_without_extension.append(
-                    torch.tensor(
-                        [int(item) for item in data.filename_without_extension]
-                    )
-                )
+                sample_ids.append(data.sample_id)
         for ihead in range(model.module.num_heads):
             predicted_values[ihead] = torch.cat(predicted_values[ihead], dim=0)
             true_values[ihead] = torch.cat(true_values[ihead], dim=0)
@@ -436,17 +432,15 @@ def test(
                 predicted_values[ihead] = gather_tensor_ranks(predicted_values[ihead])
 
     if return_sampleid:
-        filenames_without_extension = torch.cat(filenames_without_extension, dim=0)
+        sample_ids = torch.cat(sample_ids, dim=0)
         if reduce_ranks:
-            filenames_without_extension = gather_tensor_ranks(
-                filenames_without_extension
-            )
+            sample_ids = gather_tensor_ranks(sample_ids)
         return (
             test_error,
             tasks_error,
             true_values,
             predicted_values,
-            filenames_without_extension,
+            sample_ids,
         )
     else:
         return test_error, tasks_error, true_values, predicted_values

@@ -34,6 +34,12 @@ if __name__ == "__main__":
         type=str,
         default="vibrational_spectroscopy.json",
     )
+    parser.add_argument(
+        "--testplotskip",
+        help="skip samples in spectrum plot if >1",
+        type=int,
+        default=1,
+    )
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
         "--adios",
@@ -216,14 +222,11 @@ if __name__ == "__main__":
         test_taskserr,
         true_values,
         predicted_values,
-        filenames_without_extension,
+        sample_ids,
     ) = hydragnn.train.test(test_loader, model, verbosity, return_sampleid=True)
     num_samples = int(len(true_values[0]) / model.module.head_dims[0])
     if rank == 0:
-        print(num_samples)
-        print(len(true_values[0]), model.module.head_dims[0])
-        print(len(filenames_without_extension))
-        for isample in range(num_samples):
+        for isample in range(0, num_samples, args.testplotskip):
             import matplotlib.pyplot as plt
 
             plt.figure()
@@ -241,15 +244,17 @@ if __name__ == "__main__":
                     * model.module.head_dims[0]
                 ].to("cpu")
             )
-            plt.title(filenames_without_extension[isample])
+            plt.title(sample_ids[isample].item())
             plt.draw()
-            plt.savefig(f"./logs/{log_name}/spectrum_" + str(isample))
+            plt.savefig(
+                f"./logs/{log_name}/spectrum_" + str(sample_ids[isample].item())
+            )
             plt.close()
 
             textfile = open(
                 f"./logs/{log_name}/"
                 + "true_value_"
-                + str(filenames_without_extension[isample].item())
+                + str(sample_ids[isample].item())
                 + ".txt",
                 "w+",
             )
@@ -264,7 +269,7 @@ if __name__ == "__main__":
             textfile = open(
                 f"./logs/{log_name}/"
                 + "predicted_value_"
-                + str(filenames_without_extension[isample].item())
+                + str(sample_ids[isample].item())
                 + ".txt",
                 "w+",
             )
