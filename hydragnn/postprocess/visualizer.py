@@ -475,7 +475,7 @@ class Visualizer:
     ):
         """Creates scatter plots for true and predicted values of vector variable varname."""
         if head_dim > 3:
-            # FIXME: need to update for large vector plot, currently flatten 
+            # FIXME: need to update for large vector plot, currently flatten
             head_dim = 3
 
         predicted_vec = np.reshape(np.asarray(predicted_values), (-1, head_dim))
@@ -486,7 +486,7 @@ class Visualizer:
         nrow = floor(sqrt(head_dim))
         ncol = ceil(head_dim / nrow)
         fig, axs = plt.subplots(nrow, ncol, figsize=(ncol * 4, nrow * 4))
-        axs = axs.flatten() 
+        axs = axs.flatten()
         for icomp in range(head_dim):
             ax = axs[icomp]
             self.__scatter_impl(
