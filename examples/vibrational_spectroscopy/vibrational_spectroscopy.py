@@ -230,26 +230,55 @@ if __name__ == "__main__":
         output_dir = f"./logs/{log_name}/spectrum"
         os.makedirs(output_dir, exist_ok=True)
         for ihead in range(model.module.num_heads):
-            varname = config["NeuralNetwork"]["Variables_of_interest"]["output_names"][ihead]
-            head_true = torch.reshape(true_values[ihead],(-1, model.module.head_dims[ihead]))
-            head_pred = torch.reshape(predicted_values[ihead],(-1, model.module.head_dims[ihead]))
+            varname = config["NeuralNetwork"]["Variables_of_interest"]["output_names"][
+                ihead
+            ]
+            head_true = torch.reshape(
+                true_values[ihead], (-1, model.module.head_dims[ihead])
+            )
+            head_pred = torch.reshape(
+                predicted_values[ihead], (-1, model.module.head_dims[ihead])
+            )
             for isample in range(0, num_samples, args.testplotskip):
                 print(isample)
                 plt.figure()
-                plt.plot(head_true[isample,:].to("cpu"))
-                plt.plot(head_pred[isample,:].to("cpu"))
+                plt.plot(head_true[isample, :].to("cpu"))
+                plt.plot(head_pred[isample, :].to("cpu"))
                 plt.title(sample_ids[isample].item())
                 plt.draw()
-                plt.savefig(os.path.join(output_dir, varname + str(sample_ids[isample].item())+".png"))
+                plt.savefig(
+                    os.path.join(
+                        output_dir,
+                        varname + "_" + str(sample_ids[isample].item()) + ".png",
+                    )
+                )
                 plt.close()
-    
-                textfile = open( os.path.join(output_dir, varname + "_true_value_" + str(sample_ids[isample].item()) + ".txt"),"w+")
-                for element in head_true[isample,:]:
+
+                textfile = open(
+                    os.path.join(
+                        output_dir,
+                        varname
+                        + "_true_value_"
+                        + str(sample_ids[isample].item())
+                        + ".txt",
+                    ),
+                    "w+",
+                )
+                for element in head_true[isample, :]:
                     textfile.write(str(element.item()) + "\n")
                 textfile.close()
-    
-                textfile = open( os.path.join(output_dir, varname + "_predicted_value_" + str(sample_ids[isample].item()) + ".txt"), "w+")
-                for element in head_pred[isample,:]:
+
+                textfile = open(
+                    os.path.join(
+                        output_dir,
+                        varname
+                        + "_predicted_value_"
+                        + str(sample_ids[isample].item())
+                        + ".txt",
+                    ),
+                    "w+",
+                )
+                for element in head_pred[isample, :]:
                     textfile.write(str(element.item()) + "\n")
                 textfile.close()
     sys.exit(0)

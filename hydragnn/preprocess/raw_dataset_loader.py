@@ -426,9 +426,17 @@ class RawDataLoader:
             for line in all_lines[start_line:end_line]:
                 list_feat = line.split(",", n_features)
                 for icol in self.graph_feature_col:
-                    g_feature.append(float(list_feat[icol]))
+                    if isinstance(icol, int):
+                        g_feature.append(float(list_feat[icol]))
+                    elif isinstance(icol, list):
+                        g_feature.append(sum(float(list_feat[item]) for item in icol))
 
-            data_object.y = tensor(g_feature).reshape([-1,len(self.graph_feature_dim)]).transpose(0, 1).flatten()
+            data_object.y = (
+                tensor(g_feature)
+                .reshape([-1, len(self.graph_feature_dim)])
+                .transpose(0, 1)
+                .flatten()
+            )
         return data_object
 
     def __charge_density_update_for_LSMS(self, data_object: Data):
