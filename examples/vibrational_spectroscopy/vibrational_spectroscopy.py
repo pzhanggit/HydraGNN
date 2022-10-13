@@ -10,6 +10,7 @@ from hydragnn.preprocess.raw_dataset_loader import RawDataLoader
 from hydragnn.utils.model import print_model
 import torch
 import torch.distributed as dist
+import matplotlib.pyplot as plt
 
 
 def info(*args, logtype="info", sep=" "):
@@ -226,58 +227,29 @@ if __name__ == "__main__":
     ) = hydragnn.train.test(test_loader, model, verbosity, return_sampleid=True)
     num_samples = int(len(true_values[0]) / model.module.head_dims[0])
     if rank == 0:
-        for isample in range(0, num_samples, args.testplotskip):
-            import matplotlib.pyplot as plt
-
-            plt.figure()
-            plt.plot(
-                true_values[0][
-                    isample
-                    * model.module.head_dims[0] : (isample + 1)
-                    * model.module.head_dims[0]
-                ].to("cpu")
-            )
-            plt.plot(
-                predicted_values[0][
-                    isample
-                    * model.module.head_dims[0] : (isample + 1)
-                    * model.module.head_dims[0]
-                ].to("cpu")
-            )
-            plt.title(sample_ids[isample].item())
-            plt.draw()
-            plt.savefig(
-                f"./logs/{log_name}/spectrum_" + str(sample_ids[isample].item())
-            )
-            plt.close()
-
-            textfile = open(
-                f"./logs/{log_name}/"
-                + "true_value_"
-                + str(sample_ids[isample].item())
-                + ".txt",
-                "w+",
-            )
-            for element in true_values[0][
-                isample
-                * model.module.head_dims[0] : (isample + 1)
-                * model.module.head_dims[0]
-            ]:
-                textfile.write(str(element[0]) + "\n")
-            textfile.close()
-
-            textfile = open(
-                f"./logs/{log_name}/"
-                + "predicted_value_"
-                + str(sample_ids[isample].item())
-                + ".txt",
-                "w+",
-            )
-            for element in predicted_values[0][
-                isample
-                * model.module.head_dims[0] : (isample + 1)
-                * model.module.head_dims[0]
-            ]:
-                textfile.write(str(element[0]) + "\n")
-            textfile.close()
+        output_dir = f"./logs/{log_name}/spectrum"
+        os.makedirs(output_dir, exist_ok=True)
+        for ihead in range(model.module.num_heads):
+            varname = config["NeuralNetwork"]["Variables_of_interest"]["output_names"][ihead]
+            head_true = torch.reshape(true_values[ihead],(-1, model.module.head_dims[ihead]))
+            head_pred = torch.reshape(predicted_values[ihead],(-1, model.module.head_dims[ihead]))
+            for isample in range(0, num_samples, args.testplotskip):
+                print(isample)
+                plt.figure()
+                plt.plot(head_true[isample,:].to("cpu"))
+                plt.plot(head_pred[isample,:].to("cpu"))
+                plt.title(sample_ids[isample].item())
+                plt.draw()
+                plt.savefig(os.path.join(output_dir, varname + str(sample_ids[isample].item())+".png"))
+                plt.close()
+    
+                textfile = open( os.path.join(output_dir, varname + "_true_value_" + str(sample_ids[isample].item()) + ".txt"),"w+")
+                for element in head_true[isample,:]:
+                    textfile.write(str(element.item()) + "\n")
+                textfile.close()
+    
+                textfile = open( os.path.join(output_dir, varname + "_predicted_value_" + str(sample_ids[isample].item()) + ".txt"), "w+")
+                for element in head_pred[isample,:]:
+                    textfile.write(str(element.item()) + "\n")
+                textfile.close()
     sys.exit(0)
