@@ -278,14 +278,15 @@ class AbstractRawDataLoader:
             g_feature = []
 
             start_line = 500
-            end_line = 1001
+            n_features = 11
+            end_line = start_line + self.graph_feature_dim[0]
 
             for line in all_lines[start_line:end_line]:
-                node_feat = line.split(",", 11)
-                g_feature.append(float(node_feat[3]))
+                list_feat = line.split(",", n_features)
+                for icol in self.graph_feature_col:
+                    g_feature.append(float(list_feat[icol]))
 
-            data_object.y = tensor(g_feature)
-
+            data_object.y = tensor(g_feature).reshape([-1,len(self.graph_feature_dim)]).transpose(0, 1).flatten()
         return data_object
 
     def scale_features_by_num_nodes(self, dataset):
