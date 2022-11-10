@@ -418,7 +418,10 @@ def test(
                 true_values[ihead].append(head_val)
                 predicted_values[ihead].append(head_pre)
             if return_sampleid:
-                sample_ids.append(data.sample_id)
+                try:
+                    sample_ids.append(data.sample_id)
+                except:
+                    sample_ids.append(torch.tensor([int(item) for item in data.filename_without_extension]))
         for ihead in range(model.module.num_heads):
             predicted_values[ihead] = torch.cat(predicted_values[ihead], dim=0)
             true_values[ihead] = torch.cat(true_values[ihead], dim=0)
