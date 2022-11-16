@@ -6,15 +6,59 @@ import argparse
 import hydragnn
 from hydragnn.utils.time_utils import Timer
 from hydragnn.utils.config_utils import get_log_name_config
+from hydragnn.utils.atomicdescriptors import atomicdescriptors
 from hydragnn.preprocess.raw_dataset_loader import RawDataLoader
 from hydragnn.utils.model import print_model
 import torch
 import torch.distributed as dist
 import matplotlib.pyplot as plt
-
+import mendeleev
 
 def info(*args, logtype="info", sep=" "):
     getattr(logging, logtype)(sep.join(map(str, args)))
+
+class myatomicdescriptors(atomicdescriptors):
+    def __init__(
+        self,
+        embeddingfilename,
+        overwritten=True,
+        element_types=["C", "H", "O", "N","F"],
+    ):
+        if os.path.exists(embeddingfilename) and not overwritten:
+            print("loading from existing file: ", embeddingfilename)
+            with open(embeddingfilename, "r") as f:
+                self.atom_embeddings = json.load(f)
+        else:
+            self.atom_embeddings = {}
+            if element_types is None:
+                self.element_types = []
+                for ele in mendeleev.get_all_elements():
+                    self.element_types.append(ele.symbol)
+            else:
+                self.element_types = []
+                for ele in mendeleev.get_all_elements():
+                    if ele.symbol in element_types:
+                        self.element_types.append(ele.symbol)
+                self.element_types = element_types
+            electron_affinity = self.get_electron_affinity()
+            atomic_volume = self.get_atomic_volume()
+            atomic_number = self.get_atomic_number()
+            atomic_weight = self.get_atomic_weight()
+            for iele, ele in enumerate(self.element_types):
+                nfeatures = 0
+                self.atom_embeddings[str(mendeleev.element(ele).atomic_number)] = []
+                for var in [
+                    electron_affinity,
+                    atomic_volume,
+                    atomic_number,
+                    atomic_weight,
+                ]:
+                    nfeatures += var.size()[1]
+                    self.atom_embeddings[
+                        str(mendeleev.element(ele).atomic_number)
+                    ].extend(var[iele, :].tolist())
+            with open(embeddingfilename, "w") as f:
+                json.dump(self.atom_embeddings, f)
 
 
 if __name__ == "__main__":
@@ -28,6 +72,11 @@ if __name__ == "__main__":
         "--preonly",
         action="store_true",
         help="preprocess only. Adios or pickle saving and no train",
+    )
+    parser.add_argument(
+        "--mendeleev",
+        action="store_true",
+        help="use atomic descriptors from mendeleev",
     )
     parser.add_argument(
         "--inputfile",
@@ -64,11 +113,18 @@ if __name__ == "__main__":
     input_filename = os.path.join(dirpwd, args.inputfile)
     with open(input_filename, "r") as f:
         config = json.load(f)
-    hydragnn.utils.setup_log(get_log_name_config(config))
+    #hydragnn.utils.setup_log(get_log_name_config(config))
     ##################################################################################################################
     # Always initialize for multi-rank training.
     comm_size, rank = hydragnn.utils.setup_ddp()
     ##################################################################################################################
+    os.environ["SERIALIZED_DATA_PATH"] = dirpwd + "/dataset"
+    datasetname = config["Dataset"]["name"]
+    fname_adios = dirpwd + "/dataset/%s.bp" % (datasetname)
+    config["Dataset"]["name"] = "%s_%d" % (datasetname, rank)
+    
+    log_name = get_log_name_config(config)
+    hydragnn.utils.setup_log(log_name)
     comm = MPI.COMM_WORLD
     ## Set up logging
     logging.basicConfig(
@@ -76,11 +132,7 @@ if __name__ == "__main__":
         format="%%(levelname)s (rank %d): %%(message)s" % (rank),
         datefmt="%H:%M:%S",
     )
-
-    os.environ["SERIALIZED_DATA_PATH"] = dirpwd + "/dataset"
-    datasetname = config["Dataset"]["name"]
-    fname_adios = dirpwd + "/dataset/%s.bp" % (datasetname)
-    config["Dataset"]["name"] = "%s_%d" % (datasetname, rank)
+    
     if not args.loadexistingsplit:
         for dataset_type, raw_data_path in config["Dataset"]["path"].items():
             if not os.path.isabs(raw_data_path):
@@ -102,6 +154,18 @@ if __name__ == "__main__":
             valset,
             testset,
         ) = hydragnn.preprocess.load_data.load_train_val_test_sets(config, isdist=True)
+
+        if args.mendeleev:
+            atomicdescriptor = myatomicdescriptors("./embedding_mendeleev.json", overwritten=False, element_types=["C", "H", "O", "N", "F"])
+            for dataset in [trainset, valset, testset]:
+                for graphdata in dataset:
+                    xfeature = []
+                    #print(graphdata.x)
+                    #print(graphdata.num_of_protons)
+                    for inode in range(graphdata.num_nodes):
+                        xfeature.append(atomicdescriptor.get_atom_features(graphdata.num_of_protons[inode].item()))
+                    graphdata.x = torch.stack(xfeature, dim=1).transpose(0,1)
+                    print(graphdata.x.size())
 
         if args.format == "adios":
             from hydragnn.utils.adiosdataset import AdiosWriter
@@ -188,7 +252,7 @@ if __name__ == "__main__":
         optimizer, mode="min", factor=0.5, patience=5, min_lr=0.00001
     )
 
-    log_name = get_log_name_config(config)
+    assert log_name == get_log_name_config(config), f"Expect {log_name}, but get {get_log_name_config(config)}"
     writer = hydragnn.utils.get_summary_writer(log_name)
 
     if dist.is_initialized():
@@ -226,6 +290,7 @@ if __name__ == "__main__":
         sample_ids,
     ) = hydragnn.train.test(test_loader, model, verbosity, return_sampleid=True)
     num_samples = int(len(true_values[0]) / model.module.head_dims[0])
+    print(f"num_samples in test_set={num_samples}")
     if rank == 0:
         output_dir = f"./logs/{log_name}/spectrum"
         os.makedirs(output_dir, exist_ok=True)
