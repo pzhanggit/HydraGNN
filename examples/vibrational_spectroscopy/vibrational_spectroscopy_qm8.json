@@ -3,10 +3,8 @@
         "level": 2
     },
     "Dataset": {
-        "name": "YQ_max",
-        "path":{"train": "./dataset/serialized_dataset/YQ_max_train.pkl", 
-		"validate": "./dataset/serialized_dataset/YQ_max_validate.pkl", 
-		"test": "./dataset/serialized_dataset/YQ_max_test.pkl"},
+        "name": "qm8",
+        "path":{"total": "./dataset/YQ_qm8_accurate_clean"}, 
         "format": "YQ",
         "compositional_stratified_splitting": false,
         "rotational_invariance": true,
@@ -16,9 +14,9 @@
             "column_index": [0]
         },
         "graph_features":{
-            "name": ["Total-backward","excitation-0-1"],
-            "dim": [501, 501],
-            "column_index": [1, 3]
+            "name": ["excitation-0-1"],
+            "dim": [501],
+            "column_index": [3]
         },
         "normalize_input": false,
         "standardize_input": false
@@ -51,7 +49,7 @@
             "destandardize_input": false
         },
         "Training": {
-            "num_epoch": 150,
+            "num_epoch": 200,
             "perc_train": 0.95,
             "Optimizer": {
                 "type": "AdamW",
