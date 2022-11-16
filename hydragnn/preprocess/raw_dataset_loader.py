@@ -235,7 +235,7 @@ class AbstractRawDataLoader:
 
             node_feature_matrix = []
             node_position_matrix = []
-
+            num_of_protons = []
             all_lines = f.readlines()
 
             for line in all_lines:
@@ -245,6 +245,7 @@ class AbstractRawDataLoader:
                 y_pos = float(node_feat[2].strip())
                 z_pos = float(node_feat[3].strip())
                 node_position_matrix.append([x_pos, y_pos, z_pos])
+                num_of_protons.append(int(node_feat[0].strip()))
 
                 node_feature = []
                 node_feature_dim = [1]
@@ -257,10 +258,10 @@ class AbstractRawDataLoader:
 
             data_object.pos = tensor(node_position_matrix)
             data_object.x = tensor(node_feature_matrix)
-            data_object.x = torch.nn.functional.one_hot(
-                data_object.x.view(-1).to(torch.int64), num_classes=118
-            )
-
+            #data_object.x = torch.nn.functional.one_hot(
+            #    data_object.x.view(-1).to(torch.int64), num_classes=118
+            #)
+            data_object.num_of_protons = tensor(num_of_protons)
         filename_without_extension = os.path.splitext(filepath)[0]
         index = filename_without_extension.rsplit("/", 1)[1]
         data_object.sample_id = int(index)
