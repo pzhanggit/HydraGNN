@@ -362,12 +362,34 @@ def total_to_train_val_test_pkls(config, isdist=False):
             minmax_node_feature = pickle.load(f)
             minmax_graph_feature = pickle.load(f)
         dataset_total = pickle.load(f)
+    if "splitfile" in config["Dataset"]:
+        splitfile=config["Dataset"]["splitfile"]
+        with open(splitfile, "rb") as f:
+            moleculeID_perm = pickle.load(f)
+            ntrain = pickle.load(f)
+            nval = pickle.load(f)
+            moleculeID_train=moleculeID_perm[:ntrain]
+            moleculeID_val=moleculeID_perm[ntrain:ntrain+nval]
+            moleculeID_test=moleculeID_perm[ntrain+nval:]
+            trainset=[]
+            valset=[]
+            testset=[]
+            for data in dataset_total:
+                if data.sample_id in moleculeID_train:
+                    trainset.append(data)
+                elif data.sample_id in moleculeID_val:
+                    valset.append(data)
+                elif data.sample_id in moleculeID_test:
+                    testset.append(data)
+                else:
+                    print("unkown sample_id detected: %d"%data.sample_id)
 
-    trainset, valset, testset = split_dataset(
-        dataset=dataset_total,
-        perc_train=config["NeuralNetwork"]["Training"]["perc_train"],
-        stratify_splitting=config["Dataset"]["compositional_stratified_splitting"],
-    )
+    else:
+        trainset, valset, testset = split_dataset(
+            dataset=dataset_total,
+            perc_train=config["NeuralNetwork"]["Training"]["perc_train"],
+            stratify_splitting=config["Dataset"]["compositional_stratified_splitting"],
+        )
     serialized_dir = os.path.dirname(file_dir)
     config["Dataset"]["path"] = {}
     for dataset_type, dataset in zip(
