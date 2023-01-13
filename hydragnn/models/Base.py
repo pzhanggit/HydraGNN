@@ -10,7 +10,7 @@
 ##############################################################################
 
 import torch
-from torch.nn import ModuleList, Sequential, ReLU, Linear, Module
+from torch.nn import ModuleList, Sequential, ReLU, Linear, Module 
 import torch.nn.functional as F
 from torch_geometric.nn import global_mean_pool, BatchNorm
 from torch.nn import GaussianNLLLoss
@@ -267,7 +267,12 @@ class Base(Module):
         ):
             if type_head == "graph":
                 x_graph_head = self.graph_shared(x_graph)
-                outputs.append(headloc(x_graph_head))
+                #outputs.append(headloc(x_graph_head))
+                #outputs.append(F.sigmoid(headloc(x_graph_head)))
+                x_interm = headloc(x_graph_head)
+                #x_interm -= x_interm.min(dim=1, keepdim=True)[0]
+                #x_interm /= x_interm.max(dim=1, keepdim=True)[0]
+                outputs.append(x_interm)
             else:
                 if self.node_NN_type == "conv":
                     for conv, batch_norm in zip(headloc[0::2], headloc[1::2]):

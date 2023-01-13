@@ -28,6 +28,7 @@ from collections import OrderedDict
 
 def loss_function_selection(loss_function_string: str):
     if loss_function_string == "mse":
+        print(loss_function_string)
         return torch.nn.functional.mse_loss
     elif loss_function_string == "mae":
         return torch.nn.functional.l1_loss
@@ -35,6 +36,8 @@ def loss_function_selection(loss_function_string: str):
         return torch.nn.SmoothL1Loss
     elif loss_function_string == "rmse":
         return lambda x, y: torch.sqrt(torch.nn.functional.mse_loss(x, y))
+    elif loss_function_string == "weight_mse":
+        return lambda x, y: torch.sum((y + 0.1) * (x - y) ** 2)
 
 
 def save_model(model, optimizer, name, path="./logs/"):
