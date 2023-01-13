@@ -337,9 +337,9 @@ def train(
             loss, tasks_loss = model.module.loss(pred, data.y, head_index)
         with record_function("backward"):
             loss.backward()
-        print_peak_memory(verbosity, "Max memory allocated before optimizer step")
+        #print_peak_memory(verbosity, "Max memory allocated before optimizer step")
         opt.step()
-        print_peak_memory(verbosity, "Max memory allocated after optimizer")
+        #print_peak_memory(verbosity, "Max memory allocated after optimizer")
         profiler.step()
         with torch.no_grad():
             total_error += loss * data.num_graphs
