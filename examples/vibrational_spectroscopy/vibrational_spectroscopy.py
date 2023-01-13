@@ -13,10 +13,110 @@ import torch
 import torch.distributed as dist
 import matplotlib.pyplot as plt
 import mendeleev
+from rdkit import Chem
+from rdkit.Chem import rdDistGeom, rdMolTransforms
+from rdkit.Chem.rdchem import BondType as BT
+from rdkit.Chem.rdchem import HybridizationType
+import torch.nn.functional as F
+from torch_scatter import scatter
+import numpy as np
+from scipy.interpolate import griddata
 
 def info(*args, logtype="info", sep=" "):
     getattr(logging, logtype)(sep.join(map(str, args)))
 
+
+def update_graphdata_from_smilestr(smiles, data):
+
+    bonds = {BT.SINGLE: 0, BT.DOUBLE: 1, BT.TRIPLE: 2, BT.AROMATIC: 3}
+    
+    ps = Chem.SmilesParserParams()
+    ps.removeHs = False
+
+    mol = Chem.MolFromSmiles(smiles, ps)  
+    mol = Chem.AddHs(mol)
+    N = mol.GetNumAtoms()
+
+    # create a 3D conformer:
+    embedflag = rdDistGeom.EmbedMolecule(mol, randomSeed=20)
+    assert embedflag==0, "Embedding fails for %d %s"%(data.sample_id, data.smiles)
+    conf = mol.GetConformer()
+
+
+    atomic_number = []
+    aromatic = []
+    sp = []
+    sp2 = []
+    sp3 = []
+    for atom in mol.GetAtoms():
+        atomic_number.append(atom.GetAtomicNum())
+        aromatic.append(1 if atom.GetIsAromatic() else 0)
+        hybridization = atom.GetHybridization()
+        sp.append(1 if hybridization == HybridizationType.SP else 0)
+        sp2.append(1 if hybridization == HybridizationType.SP2 else 0)
+        sp3.append(1 if hybridization == HybridizationType.SP3 else 0)
+
+    z = torch.tensor(atomic_number, dtype=torch.long)
+
+    row, col, edge_type, bond_length = [], [], [],[]
+    for bond in mol.GetBonds():
+        start, end = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
+        row += [start, end]
+        col += [end, start]
+        edge_type += 2 * [bonds[bond.GetBondType()]]
+        bond_length += 2 * [rdMolTransforms.GetBondLength(conf, start, end)]
+
+    edge_index = torch.tensor([row, col], dtype=torch.long)
+    edge_type = torch.tensor(edge_type, dtype=torch.long)
+    #edge_attr = F.one_hot(edge_type, num_classes=len(bonds)).to(torch.float)
+    bond_length = torch.tensor(bond_length)
+    edge_type = torch.tensor(edge_type)
+    edge_attr = torch.stack((bond_length, edge_type), dim=1)
+
+    perm = (edge_index[0] * N + edge_index[1]).argsort()
+    edge_index = edge_index[:, perm]
+    edge_attr = edge_attr[perm]
+
+    row, col = edge_index
+    hs = (z == 1).to(torch.float)
+    num_hs = scatter(hs[row], col, dim_size=N).tolist()
+
+    x = (
+        torch.tensor([atomic_number, aromatic, sp, sp2, sp3, num_hs], dtype=torch.float)
+        .t()
+        .contiguous()
+    )
+    data.x = z.reshape((-1, 1)) #x
+    data.edge_index = edge_index
+    data.edge_attr = edge_attr
+
+    return data 
+
+def getcolordensity(xdata, ydata):
+    ###############################
+    print("###############################")
+    nbin = 20
+    hist2d, xbins_edge, ybins_edge = np.histogram2d(
+        x=xdata, y=ydata, bins=[nbin, nbin]
+    )
+    xbin_cen = 0.5 * (xbins_edge[0:-1] + xbins_edge[1:])
+    ybin_cen = 0.5 * (ybins_edge[0:-1] + ybins_edge[1:])
+    BCTY, BCTX = np.meshgrid(ybin_cen, xbin_cen)
+    hist2d = hist2d / np.amax(hist2d)
+
+    bctx1d = np.reshape(BCTX, len(xbin_cen) * nbin)
+    bcty1d = np.reshape(BCTY, len(xbin_cen) * nbin)
+    loc_pts = np.zeros((len(xbin_cen) * nbin, 2))
+    loc_pts[:, 0] = bctx1d
+    loc_pts[:, 1] = bcty1d
+    hist2d_norm = griddata(
+        loc_pts,
+        hist2d.reshape(len(xbin_cen) * nbin),
+        (xdata, ydata),
+        method="linear",
+        fill_value=0,
+    ) 
+    return hist2d_norm
 class myatomicdescriptors(atomicdescriptors):
     def __init__(
         self,
@@ -49,7 +149,7 @@ class myatomicdescriptors(atomicdescriptors):
                 self.atom_embeddings[str(mendeleev.element(ele).atomic_number)] = []
                 for var in [
                     electron_affinity,
-                    atomic_volume,
+                    #atomic_volume,
                     atomic_number,
                     atomic_weight,
                 ]:
@@ -79,10 +179,21 @@ if __name__ == "__main__":
         help="use atomic descriptors from mendeleev",
     )
     parser.add_argument(
+        "--normalizey",
+        action="store_true",
+        help="normalize spectrum for each sample to be [0, 1]",
+    )
+    parser.add_argument(
         "--inputfile",
         help="input file",
         type=str,
         default="vibrational_spectroscopy.json",
+    )
+    parser.add_argument(
+        "--logname",
+        help="output directory",
+        type=str,
+        default="qm8",
     )
     parser.add_argument(
         "--testplotskip",
@@ -123,7 +234,7 @@ if __name__ == "__main__":
     fname_adios = dirpwd + "/dataset/%s.bp" % (datasetname)
     config["Dataset"]["name"] = "%s_%d" % (datasetname, rank)
     
-    log_name = get_log_name_config(config)
+    log_name = args.logname #get_log_name_config(config)
     hydragnn.utils.setup_log(log_name)
     comm = MPI.COMM_WORLD
     ## Set up logging
@@ -155,17 +266,6 @@ if __name__ == "__main__":
             testset,
         ) = hydragnn.preprocess.load_data.load_train_val_test_sets(config, isdist=True)
 
-        if args.mendeleev:
-            atomicdescriptor = myatomicdescriptors("./embedding_mendeleev.json", overwritten=False, element_types=["C", "H", "O", "N", "F"])
-            for dataset in [trainset, valset, testset]:
-                for graphdata in dataset:
-                    xfeature = []
-                    #print(graphdata.x)
-                    #print(graphdata.num_of_protons)
-                    for inode in range(graphdata.num_nodes):
-                        xfeature.append(atomicdescriptor.get_atom_features(graphdata.num_of_protons[inode].item()))
-                    graphdata.x = torch.stack(xfeature, dim=1).transpose(0,1)
-                    print(graphdata.x.size())
 
         if args.format == "adios":
             from hydragnn.utils.adiosdataset import AdiosWriter
@@ -225,6 +325,44 @@ if __name__ == "__main__":
         "trainset,valset,testset size: %d %d %d"
         % (len(trainset), len(valset), len(testset))
     )
+    if config["Dataset"]["edge_connectivity"]=="SMILES":
+        for dataset in [trainset, valset, testset]:
+            print("==============================================================")
+            for graphdata in dataset:
+                #print(graphdata.sample_id, graphdata.smiles)
+                graphdata = update_graphdata_from_smilestr(graphdata.smiles, graphdata)
+                #print(graphdata.x)
+                print(graphdata.x.size(), graphdata.edge_index.size(), graphdata.edge_attr.size(), graphdata.y.size())
+        config["NeuralNetwork"]["Variables_of_interest"]["input_node_features"]=[*range(graphdata.x.size()[1])]
+        config["NeuralNetwork"]["Architecture"]["edge_features"] = ["length","bond_type"]
+    if args.mendeleev:
+        atomicdescriptor = myatomicdescriptors("./embedding_mendeleev.json", overwritten=False, element_types=["C", "H", "O", "N", "F"])
+        for dataset in [trainset, valset, testset]:
+            for graphdata in dataset:
+                xfeature = []
+                #print(graphdata.x)
+                #print(graphdata.num_of_protons)
+                for inode in range(graphdata.num_nodes):
+                    xfeature.append(atomicdescriptor.get_atom_features(graphdata.num_of_protons[inode].item()))
+                graphdata.x = torch.stack(xfeature, dim=1).transpose(0,1)
+                print(graphdata.x.size())
+        config["NeuralNetwork"]["Variables_of_interest"]["input_node_features"]=[*range(graphdata.x.size()[1])]
+    if args.normalizey:
+       mol_nan = []
+       for dataset in [trainset, valset, testset]:
+           for graphdata in dataset:
+               #print(graphdata.y.min(), graphdata.y.max())
+               if graphdata.y.max() > graphdata.y.min():
+                   graphdata.y = (graphdata.y - graphdata.y.min())/(graphdata.y.max()-graphdata.y.min())
+               #print("==============================================================")
+               if torch.isnan(graphdata.y).any():
+                 #  print(graphdata.sample_id, graphdata.y)
+                   mol_nan.append(str(graphdata.sample_id))
+               #print(graphdata.y.min(), graphdata.y.max())
+               #print("==============================================================")
+       assert len(mol_nan)==0, "nan after normalization for samples: "+', '.join(mol_nan)
+
+
 
     (train_loader, val_loader, test_loader,) = hydragnn.preprocess.create_dataloaders(
         trainset, valset, testset, config["NeuralNetwork"]["Training"]["batch_size"]
@@ -247,12 +385,16 @@ if __name__ == "__main__":
     model = hydragnn.utils.get_distributed_model(model, verbosity)
 
     learning_rate = config["NeuralNetwork"]["Training"]["Optimizer"]["learning_rate"]
-    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+    weight_decay = 0.01 #the default value is 0.01 in pytorch for AdamW
+    if "weight_decay" in config["NeuralNetwork"]["Training"]["Optimizer"]:
+        weight_decay = config["NeuralNetwork"]["Training"]["Optimizer"]["weight_decay"] 
+    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=5, min_lr=0.00001
     )
 
-    assert log_name == get_log_name_config(config), f"Expect {log_name}, but get {get_log_name_config(config)}"
+    #assert log_name == get_log_name_config(config), f"Expect {log_name}, but get {get_log_name_config(config)}"
+    print(f"Expect {log_name}, but get {get_log_name_config(config)}")
     writer = hydragnn.utils.get_summary_writer(log_name)
 
     if dist.is_initialized():
@@ -263,6 +405,8 @@ if __name__ == "__main__":
     plot_init_solution = config["Visualization"]["plot_init_solution"]
     plot_hist_solution = config["Visualization"]["plot_hist_solution"]
     create_plots = config["Visualization"]["create_plots"]
+    for param_group in optimizer.param_groups:
+        print(param_group)
     hydragnn.train.train_validate_test(
         model,
         optimizer,
@@ -274,76 +418,128 @@ if __name__ == "__main__":
         config["NeuralNetwork"],
         log_name,
         verbosity,
-        plot_init_solution=plot_init_solution,
+        plot_init_solution=True,#plot_init_solution,
         plot_hist_solution=plot_hist_solution,
-        create_plots=create_plots,
+        create_plots=True,#create_plots,
     )
 
     hydragnn.utils.save_model(model, optimizer, log_name)
     hydragnn.utils.print_timers(verbosity)
 
-    (
-        test_rmse,
-        test_taskserr,
-        true_values,
-        predicted_values,
-        sample_ids,
-    ) = hydragnn.train.test(test_loader, model, verbosity, return_sampleid=True)
-    num_samples = int(len(true_values[0]) / model.module.head_dims[0])
-    print(f"num_samples in test_set={num_samples}")
-    if rank == 0:
-        output_dir = f"./logs/{log_name}/spectrum"
-        os.makedirs(output_dir, exist_ok=True)
-        for ihead in range(model.module.num_heads):
-            varname = config["NeuralNetwork"]["Variables_of_interest"]["output_names"][
-                ihead
-            ]
-            head_true = torch.reshape(
-                true_values[ihead], (-1, model.module.head_dims[ihead])
-            )
-            head_pred = torch.reshape(
-                predicted_values[ihead], (-1, model.module.head_dims[ihead])
-            )
-            for isample in range(0, num_samples, args.testplotskip):
-                print(isample)
-                plt.figure()
-                plt.plot(head_true[isample, :].to("cpu"))
-                plt.plot(head_pred[isample, :].to("cpu"))
-                plt.title(sample_ids[isample].item())
-                plt.draw()
-                plt.savefig(
-                    os.path.join(
-                        output_dir,
-                        varname + "_" + str(sample_ids[isample].item()) + ".png",
+    for isub, (loader, setname) in enumerate(
+       zip([train_loader, val_loader, test_loader], ["train", "val", "test"])
+    ):
+        (
+            test_rmse,
+            test_taskserr,
+            true_values,
+            predicted_values,
+            sample_ids,
+        ) = hydragnn.train.test(loader, model, verbosity, return_sampleid=True)
+        num_samples = int(len(true_values[0]) / model.module.head_dims[0])
+        print(f"num_samples in test_set={num_samples}")
+        if rank == 0:
+            output_dir = f"./logs/{log_name}/spectrum/{setname}"
+            os.makedirs(output_dir, exist_ok=True)
+            for ihead in range(model.module.num_heads):
+                varname = config["NeuralNetwork"]["Variables_of_interest"]["output_names"][
+                    ihead
+                ]
+                head_true = torch.reshape(
+                    true_values[ihead], (-1, model.module.head_dims[ihead])
+                )
+                head_pred = torch.reshape(
+                    predicted_values[ihead], (-1, model.module.head_dims[ihead])
+                )
+                for isample in range(0, num_samples, args.testplotskip):
+                    print(isample)
+                    plt.figure()
+                    plt.plot(head_true[isample, :].to("cpu"))
+                    plt.plot(head_pred[isample, :].to("cpu"))
+                    plt.title(sample_ids[isample].item())
+                    plt.draw()
+                    plt.savefig(
+                        os.path.join(
+                            output_dir,
+                            varname + "_" + str(sample_ids[isample].item()) + ".png",
+                        )
                     )
-                )
-                plt.close()
+                    plt.close()
 
-                textfile = open(
-                    os.path.join(
-                        output_dir,
-                        varname
-                        + "_true_value_"
-                        + str(sample_ids[isample].item())
-                        + ".txt",
-                    ),
-                    "w+",
-                )
-                for element in head_true[isample, :]:
-                    textfile.write(str(element.item()) + "\n")
-                textfile.close()
+                    textfile = open(
+                        os.path.join(
+                            output_dir,
+                            varname
+                            + "_true_value_"
+                            + str(sample_ids[isample].item())
+                            + ".txt",
+                        ),
+                        "w+",
+                    )
+                    for element in head_true[isample, :]:
+                        textfile.write(str(element.item()) + "\n")
+                    textfile.close()
 
-                textfile = open(
-                    os.path.join(
-                        output_dir,
-                        varname
-                        + "_predicted_value_"
-                        + str(sample_ids[isample].item())
-                        + ".txt",
-                    ),
-                    "w+",
-                )
-                for element in head_pred[isample, :]:
-                    textfile.write(str(element.item()) + "\n")
-                textfile.close()
+                    textfile = open(
+                        os.path.join(
+                            output_dir,
+                            varname
+                            + "_predicted_value_"
+                            + str(sample_ids[isample].item())
+                            + ".txt",
+                        ),
+                        "w+",
+                    )
+                    for element in head_pred[isample, :]:
+                        textfile.write(str(element.item()) + "\n")
+                    textfile.close()
+    ##################################################################################################################
+    print("Before final parity plot")
+    fig, axs = plt.subplots(1, 3, figsize=(18, 6))
+    for isub, (loader, setname) in enumerate(
+       zip([train_loader, val_loader, test_loader], ["train", "val", "test"])
+    ):
+        (
+          test_rmse,
+          test_taskserr,
+          true_values,
+          predicted_values,
+          sample_ids,
+        ) = hydragnn.train.test(loader, model, verbosity, return_sampleid=True)
+        num_samples = int(len(true_values[0]) / model.module.head_dims[0])
+        print(f"num_samples in {setname} = {num_samples}")
+        ihead = 0
+        head_true = np.asarray(true_values[ihead].cpu()).squeeze()
+        head_pred = np.asarray(predicted_values[ihead].cpu()).squeeze()
+        varname = config["NeuralNetwork"]["Variables_of_interest"]["output_names"][
+            ihead
+        ]
+
+        ax = axs[isub]
+        error_mae = np.mean(np.abs(head_pred - head_true))
+        error_rmse = np.sqrt(np.mean(np.abs(head_pred - head_true) ** 2))
+        print(varname, ": , mae=", error_mae, ", rmse= ", error_rmse)
+        hist2d_norm = getcolordensity(head_true, head_pred)
+        ax.scatter(head_true, head_pred, s=7, c=hist2d_norm, vmin=0, vmax=1)
+        #ax.scatter(
+        #   head_true,
+        #   head_pred,
+        #   s=7,
+        #   linewidth=0.5,
+        #   edgecolor="b",
+        #   facecolor="none",
+        #)
+        minv = np.minimum(np.amin(head_pred), np.amin(head_true))
+        maxv = np.maximum(np.amax(head_pred), np.amax(head_true))
+        ax.plot([minv, maxv], [minv, maxv], "r--")
+        ax.set_title(setname + "; " + varname, fontsize=16)
+        ax.text(
+           minv + 0.1 * (maxv - minv),
+           maxv - 0.1 * (maxv - minv),
+           "MAE: {:.2f}".format(error_mae),
+        )
+    if rank == 0:
+        fig.savefig("./logs/" + log_name + "/" + varname + "_all.png")
+    plt.close()
+
     sys.exit(0)
