@@ -23,6 +23,10 @@ from hydragnn.utils import nsplit, tensor_divide, comm_reduce
 
 import random
 
+from rdkit import Chem
+from rdkit.Chem import rdDistGeom
+# WARNING: DO NOT use collective communication calls here because only rank 0 uses this routines
+import math
 
 class AbstractRawDataLoader:
     """A class used for loading raw files that contain data representing atom structures, transforms it and stores the structures as file of serialized structures.
@@ -85,7 +89,14 @@ class AbstractRawDataLoader:
             if config["standardize_input"] is not None
             else False
         )
-
+        self.edge_connectivity = None
+        if "edge_connectivity" in config:
+            self.edge_connectivity=config["edge_connectivity"]
+    
+        self.data_source = None
+        if "data_source" in config:
+            self.data_source=config["data_source"]
+        
         assert len(self.node_feature_name) == len(self.node_feature_dim)
         assert len(self.node_feature_name) == len(self.node_feature_col)
         assert len(self.graph_feature_name) == len(self.graph_feature_dim)
@@ -119,8 +130,15 @@ class AbstractRawDataLoader:
             assert (
                 len(os.listdir(raw_data_path)) > 0
             ), "No data files provided in {}!".format(raw_data_path)
-
-            filelist = sorted(os.listdir(raw_data_path))
+            if self.data_source=="mixed":
+                subdirs = sorted(os.listdir(raw_data_path))
+                filelist = []
+                for sub in subdirs:
+                    filelistsub = sorted(os.listdir(os.path.join(raw_data_path,sub)))
+                    for item in filelistsub:
+                        filelist.append(sub+"/"+item)
+            else:
+                filelist = sorted(os.listdir(raw_data_path))
             if self.dist:
                 ## Random shuffle filelist to avoid the same test/validation set
                 random.seed(43)
@@ -226,7 +244,18 @@ class AbstractRawDataLoader:
         Data
             Data object representing structure of a graph sample.
         """
-
+        #check if files exist
+        if not filepath.endswith(".xyz"):
+            return None
+        filename_without_extension = os.path.splitext(filepath)[0]
+        filedir = filename_without_extension.rsplit("/", 1)[0]
+        index = filename_without_extension.rsplit("/", 1)[1]
+        if not os.path.exists(filename_without_extension + "_vis_inc_0K.csv"):
+            return None
+        if self.edge_connectivity is not None:
+            if not os.path.exists(filedir+"/INFO-"+index+".dat"):
+                return None
+        
         data_object = Data()
 
         # input files
@@ -262,8 +291,8 @@ class AbstractRawDataLoader:
             #    data_object.x.view(-1).to(torch.int64), num_classes=118
             #)
             data_object.num_of_protons = tensor(num_of_protons)
-        filename_without_extension = os.path.splitext(filepath)[0]
-        index = filename_without_extension.rsplit("/", 1)[1]
+        #filename_without_extension = os.path.splitext(filepath)[0]
+        #index = filename_without_extension.rsplit("/", 1)[1]
         data_object.sample_id = int(index)
 
         # output files
@@ -280,9 +309,14 @@ class AbstractRawDataLoader:
 
             start_line = 500
             n_features = 11
-            end_line = start_line + self.graph_feature_dim[0]
+            n_partial= math.ceil(500/self.graph_feature_dim[0])
+            #end_line = start_line + self.graph_feature_dim[0]
+            #end_line = start_line + 2*self.graph_feature_dim[0]
+            end_line = start_line + n_partial*self.graph_feature_dim[0]
 
-            for line in all_lines[start_line:end_line]:
+            #for line in all_lines[start_line:end_line]:
+            #for line in all_lines[start_line:end_line:2]:
+            for line in all_lines[start_line:end_line:n_partial]:
                 list_feat = line.split(",", n_features)
                 for icol in self.graph_feature_col:
                     if isinstance(icol, int):
@@ -296,6 +330,19 @@ class AbstractRawDataLoader:
                 .transpose(0, 1)
                 .flatten()
             )
+        if self.edge_connectivity=="SMILES":
+            with open(filedir+"/INFO-"+index+".dat") as f:
+                data_object.smiles = f.readline().strip('\n')
+            #prechecking 
+            ps = Chem.SmilesParserParams()
+            ps.removeHs = False
+            mol = Chem.MolFromSmiles(data_object.smiles, ps)  
+            mol = Chem.AddHs(mol)
+            embedflag = rdDistGeom.EmbedMolecule(mol, randomSeed=20)
+            if embedflag ==-1:
+                print("Embedding failed for: %d %s"%(data_object.sample_id,  data_object.smiles))
+                return None
+
         return data_object
 
     def scale_features_by_num_nodes(self, dataset):

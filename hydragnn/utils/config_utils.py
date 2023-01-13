@@ -238,13 +238,13 @@ def get_log_name_config(config):
             if config["Dataset"]["name"].rfind("_") > 0
             else None
         ]
-        + "-node_ft-"
-        + "".join(
-            str(x)
-            for x in config["NeuralNetwork"]["Variables_of_interest"][
-                "input_node_features"
-            ]
-        )
+    #    + "-node_ft-"
+    #    + "".join(
+    #        str(x)
+    #        for x in config["NeuralNetwork"]["Variables_of_interest"][
+    #            "input_node_features"
+    #        ]
+    #    )
         + "-task_weights-"
         + "".join(
             str(weigh) + "-"

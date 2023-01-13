@@ -17,6 +17,7 @@ from itertools import chain
 import time, pickle
 import numpy as np
 from math import sqrt, floor, ceil
+from scipy.interpolate import griddata
 
 plt.rcParams.update({"font.size": 14})
 
@@ -102,6 +103,33 @@ class Visualizer:
             np.sum(hist2d_pasr, axis=1) + 1e-12
         )
         return xcen_pasr, mean1d_cond
+    def getcolordensity(self, xdata, ydata):
+        ###############################
+        print(xdata)
+        print(ydata)
+        print("###############################")
+        nbin = 20
+        hist2d, xbins_edge, ybins_edge = np.histogram2d(
+            x=xdata, y=ydata, bins=[nbin, nbin]
+        )
+        xbin_cen = 0.5 * (xbins_edge[0:-1] + xbins_edge[1:])
+        ybin_cen = 0.5 * (ybins_edge[0:-1] + ybins_edge[1:])
+        BCTY, BCTX = np.meshgrid(ybin_cen, xbin_cen)
+        hist2d = hist2d / np.amax(hist2d)
+
+        bctx1d = np.reshape(BCTX, len(xbin_cen) * nbin)
+        bcty1d = np.reshape(BCTY, len(xbin_cen) * nbin)
+        loc_pts = np.zeros((len(xbin_cen) * nbin, 2))
+        loc_pts[:, 0] = bctx1d
+        loc_pts[:, 1] = bcty1d
+        hist2d_norm = griddata(
+            loc_pts,
+            hist2d.reshape(len(xbin_cen) * nbin),
+            (xdata, ydata),
+            method="linear",
+            fill_value=0,
+        ) 
+        return hist2d_norm
 
     def __scatter_impl(
         self,
@@ -116,8 +144,12 @@ class Visualizer:
         y_label=None,
         xylim_equal=False,
     ):
+        x = x.squeeze()
+        y = y.squeeze()
+        hist2d_norm = self.getcolordensity(x, y)
+        ax.scatter(x, y, s=s, c=hist2d_norm, vmin=0, vmax=1)
 
-        ax.scatter(x, y, s=s, edgecolor="b", marker=marker, facecolor="none")
+        #ax.scatter(x, y, s=s, edgecolor="b", marker=marker, facecolor="none")
 
         ax.set_title(title + ", number of samples =" + str(len(x)))
         ax.set_xlabel(x_label)
@@ -144,8 +176,8 @@ class Visualizer:
             ax = axs[0]
             self.__scatter_impl(
                 ax,
-                true_values,
-                predicted_values,
+                true_values.squeeze(),
+                predicted_values.squeeze(),
                 title="Scalar output",
                 x_label="True",
                 y_label="Predicted",
@@ -283,8 +315,6 @@ class Visualizer:
     ):
         """Creates scatter plots for true_values and predicted values of variable varname at iepoch."""
 
-        true_values = true_values.cpu().detach().numpy()
-        predicted_values = predicted_values.cpu().detach().numpy()
         nshape = np.asarray(predicted_values).shape
         if nshape[1] == 1:
             fig, axs = plt.subplots(1, 2, figsize=(12, 6))
@@ -697,8 +727,8 @@ class Visualizer:
     ):
         """Creates scatter plots for all head predictions."""
         for ihead in range(self.num_heads):
-            head_true = true_values[ihead].cpu()
-            head_pred = predicted_values[ihead].cpu()
+            head_true = true_values[ihead].cpu().detach().numpy()
+            head_pred = predicted_values[ihead].cpu().detach().numpy()
             if self.head_dims[ihead] > 1:
                 # vector output
                 self.create_parity_plot_vector(
@@ -725,8 +755,8 @@ class Visualizer:
     def create_plot_global(self, true_values, predicted_values, output_names=None):
         """Creates global analysis for all head predictons, e.g., scatter/condmean/error pdf plot."""
         for ihead in range(self.num_heads):
-            head_true = true_values[ihead].cpu()
-            head_pred = predicted_values[ihead].cpu()
+            head_true = true_values[ihead].cpu().detach().numpy()
+            head_pred = predicted_values[ihead].cpu().detach().numpy()
             self.create_plot_global_analysis(
                 output_names[ihead],
                 head_true,
