@@ -120,3 +120,23 @@ def print_model(model):
     print_master("-" * 50)
     print_master("%50s\t%20s\t%10d" % ("Total", "", num_params))
     print_master("All (total, MB): %d %g" % (num_params, num_params * 4 / 1024 / 1024))
+
+#early stop based on validation loss
+class EarlyStopping:
+    def __init__(self, patience=10, min_delta=0.0):
+        self.patience=patience
+        self.min_delta=min_delta
+        self.val_loss_min = float('inf')
+        self.count = 0
+    def __call__(self, val_loss):
+        if val_loss > self.val_loss_min + self.min_delta:
+            self.count += 1
+            if self.count >= self.patience:
+                return True
+        else:    
+            self.val_loss_min = val_loss
+            self.count = 0 
+        return False
+
+
+

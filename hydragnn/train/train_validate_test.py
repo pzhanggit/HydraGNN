@@ -22,7 +22,7 @@ from hydragnn.utils.time_utils import Timer
 from hydragnn.utils.profile import Profiler
 from hydragnn.utils.distributed import get_device, print_peak_memory
 from hydragnn.preprocess.load_data import HydraDataLoader
-
+from hydragnn.utils.model import EarlyStopping
 import os
 
 from torch.profiler import record_function
@@ -49,6 +49,9 @@ def train_validate_test(
     create_plots=False,
 ):
     num_epoch = config["Training"]["num_epoch"]
+    EarlyStop=False
+    if "EarlyStopping" in config["Training"]:
+        EarlyStop=config["Training"]["EarlyStopping"]
 
     device = get_device()
     # total loss tracking for train/vali/test
@@ -97,6 +100,8 @@ def train_validate_test(
     timer = Timer("train_validate_test")
     timer.start()
 
+    if EarlyStop:
+        earlystopper = EarlyStopping(patience=15, min_delta=0)
     for epoch in range(0, num_epoch):
         profiler.set_current_epoch(epoch)
         for dataloader in [train_loader, val_loader, test_loader]:
@@ -148,6 +153,10 @@ def train_validate_test(
                 output_names=config["Variables_of_interest"]["output_names"],
                 iepoch=epoch,
             )
+        if EarlyStop:
+            if earlystopper(reduce_values_ranks(val_loss)):
+                print_distributed(verbosity, "Early stopping executed at epoch = %d due to val_loss not decreasing"%epoch)
+                break
 
     timer.stop()
 
