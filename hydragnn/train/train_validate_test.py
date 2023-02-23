@@ -23,7 +23,6 @@ from hydragnn.utils.profile import Profiler
 from hydragnn.utils.distributed import get_device, print_peak_memory
 from hydragnn.preprocess.load_data import HydraDataLoader
 from hydragnn.utils.model import EarlyStopping
-
 import os
 
 from torch.profiler import record_function
@@ -110,6 +109,8 @@ def train_validate_test(
     timer = Timer("train_validate_test")
     timer.start()
 
+    if EarlyStop:
+        earlystopper = EarlyStopping(patience=15, min_delta=0)
     for epoch in range(0, num_epoch):
         profiler.set_current_epoch(epoch)
         for dataloader in [train_loader, val_loader, test_loader]:
