@@ -110,7 +110,8 @@ def train_validate_test(
     timer.start()
 
     if EarlyStop:
-        earlystopper = EarlyStopping(patience=15, min_delta=0)
+        #earlystopper = EarlyStopping(patience=15, min_delta=0)
+        earlystopper = EarlyStopping(patience=20, min_delta=0)
     for epoch in range(0, num_epoch):
         profiler.set_current_epoch(epoch)
         for dataloader in [train_loader, val_loader, test_loader]:

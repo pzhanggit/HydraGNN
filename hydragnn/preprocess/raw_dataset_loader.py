@@ -102,6 +102,14 @@ class AbstractRawDataLoader:
         assert len(self.graph_feature_name) == len(self.graph_feature_dim)
         assert len(self.graph_feature_name) == len(self.graph_feature_col)
 
+        if "textposition" in config:
+            assert len(config["textposition"])==2
+            self.startline = config["textposition"][0]
+            self.endline  = config["textposition"][1]
+        else:
+            self.startline = 500
+            self.endline  = 1001
+
         # only one between normalization and standardization makes sense to be used
         assert not (self.normalize_input and self.standardize_input)
 
@@ -307,9 +315,9 @@ class AbstractRawDataLoader:
 
             g_feature = []
 
-            start_line = 500
+            start_line = self.startline #500
             n_features = 11
-            n_partial= math.ceil(500/self.graph_feature_dim[0])
+            n_partial= math.ceil((self.endline-self.startline)/self.graph_feature_dim[0])
             #end_line = start_line + self.graph_feature_dim[0]
             #end_line = start_line + 2*self.graph_feature_dim[0]
             end_line = start_line + n_partial*self.graph_feature_dim[0]
@@ -330,6 +338,7 @@ class AbstractRawDataLoader:
                 .transpose(0, 1)
                 .flatten()
             )
+            print(data_object.y.size())
         if self.edge_connectivity=="SMILES":
             with open(filedir+"/INFO-"+index+".dat") as f:
                 data_object.smiles = f.readline().strip('\n')
