@@ -454,7 +454,10 @@ if __name__ == "__main__":
        assert len(mol_nan)==0, "nan after normalization for samples: "+', '.join(mol_nan)
     if args.pca>0:
        npca=args.pca
-       pcafile=dirpwd+"/../../../test/SiC_Chemistry_Reduction/logs/nz-%d-PCA-True/PCA.joblib"%npca
+       if datasetname == "qm8":
+           pcafile=dirpwd+"/../../../test/SiC_Chemistry_Reduction/logs/nz-%d-PCA-True/PCA.joblib"%npca
+       else:    
+           pcafile=dirpwd+"/../../../test/SiC_Chemistry_Reduction/logs_QM9-DFT-HQ/nz-%d-PCA-True/PCA.joblib"%npca
        pca=joblib.load(pcafile)
        for dataset in [trainset, valset, testset]:
           for graphdata in dataset:
@@ -465,7 +468,11 @@ if __name__ == "__main__":
     elif args.pca<0:
        npca=-args.pca
        ae_model = autoencoder(501, reduced_dim=npca, hidden_dim_ae=[250], PCA=False)
-       modelfile=dirpwd+"/../../../test/SiC_Chemistry_Reduction/logs/nz-%d-PCA-False/model.pk"%npca
+       #modelfile=dirpwd+"/../../../test/SiC_Chemistry_Reduction/logs/nz-%d-PCA-False/model.pk"%npca
+       if datasetname == "qm8":
+           modelfile=dirpwd+"/../../../test/SiC_Chemistry_Reduction/logs/nz-%d-PCA-False/model.pk"%npca
+       else:    
+           modelfile=dirpwd+"/../../../test/SiC_Chemistry_Reduction/logs_QM9-DFT-HQ/nz-%d-PCA-False/model.pk"%npca
        print("Load existing model:", modelfile)
        ae_model.load_state_dict(torch.load(modelfile))
        ae_model.eval()

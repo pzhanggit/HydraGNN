@@ -88,7 +88,7 @@ def train_validate_test(
         )
         visualizer.num_nodes_plot()
 
-    if create_plots and plot_init_solution:  # visualizing of initial conditions
+    if False:#create_plots and plot_init_solution:  # visualizing of initial conditions
         _, _, true_values, predicted_values = test(test_loader, model, verbosity)
         visualizer.create_scatter_plots(
             true_values,
@@ -205,16 +205,16 @@ def train_validate_test(
     _, rank = get_comm_size_and_rank()
     if create_plots and (rank == 0):
         ######result visualization######
-        visualizer.create_plot_global(
-            true_values,
-            predicted_values,
-            output_names=config["Variables_of_interest"]["output_names"],
-        )
-        visualizer.create_scatter_plots(
-            true_values,
-            predicted_values,
-            output_names=config["Variables_of_interest"]["output_names"],
-        )
+        #visualizer.create_plot_global(
+        #    true_values,
+        #    predicted_values,
+        #    output_names=config["Variables_of_interest"]["output_names"],
+        #)
+        #visualizer.create_scatter_plots(
+        #    true_values,
+        #    predicted_values,
+        #    output_names=config["Variables_of_interest"]["output_names"],
+        #)
         ######plot loss history#####
         visualizer.plot_history(
             total_loss_train,
