@@ -24,4 +24,5 @@ from .serialized_dataset_loader import (
 )
 from .lsms_raw_dataset_loader import LSMS_RawDataLoader
 from .cfg_raw_dataset_loader import CFG_RawDataLoader
+from .YQ_raw_dataset_loader import YQ_RawDataLoader
 from .compositional_data_splitting import compositional_stratified_splitting

@@ -8,7 +8,8 @@ from hydragnn.utils.time_utils import Timer
 from hydragnn.utils.config_utils import get_log_name_config
 from hydragnn.utils.atomicdescriptors import atomicdescriptors
 from hydragnn.utils.print_utils import print_distributed
-from hydragnn.preprocess.raw_dataset_loader import RawDataLoader
+#from hydragnn.preprocess.raw_dataset_loader import RawDataLoader
+from hydragnn.preprocess.YQ_raw_dataset_loader import YQ_RawDataLoader
 from hydragnn.utils.model import print_model, load_existing_model
 import torch
 import torch.distributed as dist
@@ -321,7 +322,7 @@ if __name__ == "__main__":
         #############test outputsize###############################
         config["Dataset"]["textposition"]=[args.startline, args.endline]
         ## each process saves its own data file
-        loader = RawDataLoader(config["Dataset"], dist=True)
+        loader = YQ_RawDataLoader(config["Dataset"], dist=True)
         loader.load_raw_data()
         
         if args.loadsplit:

@@ -132,7 +132,7 @@ def train_validate_test(
         val_loss, val_taskserr = validate(
             val_loader, model, verbosity, reduce_ranks=True
         )
-        test_loss, test_taskserr, true_values, predicted_values, _ = test(
+        test_loss, test_taskserr, true_values, predicted_values = test(
             test_loader,
             model,
             verbosity,
