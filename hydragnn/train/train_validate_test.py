@@ -519,8 +519,12 @@ def train(
                 pred = model(data)
                 loss, tasks_loss = model.module.energy_force_loss(pred, data)
             else:
-                pred = model(data)
-                loss, tasks_loss = model.module.loss(pred, data.y, head_index)
+                # Perform forward pass and backward pass under autocast
+                with autocast(enabled=use_tensor_cores, dtype=torch.bfloat16):
+                #with autocast(enabled=use_tensor_cores, dtype=torch.float16):
+                #with autocast(enabled=use_tensor_cores, dtype=torch.float32):
+                    pred = model(data)
+                    loss, tasks_loss = model.module.loss(pred, data.y, head_index)
             if trace_level > 0:
                 tr.start("forward_sync", **syncopt)
                 MPI.COMM_WORLD.Barrier()
