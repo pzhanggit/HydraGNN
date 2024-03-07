@@ -516,8 +516,12 @@ def train(
                 tr.stop("h2d", **syncopt)
             if compute_grad_energy:  # for force and energy prediction
                 data.pos.requires_grad = True
-                pred = model(data)
-                loss, tasks_loss = model.module.energy_force_loss(pred, data)
+                # Perform forward pass and backward pass under autocast
+                with autocast(enabled=use_tensor_cores, dtype=torch.bfloat16):
+                    # with autocast(enabled=use_tensor_cores, dtype=torch.float16):
+                    # with autocast(enabled=use_tensor_cores, dtype=torch.float32):
+                    pred = model(data)
+                    loss, tasks_loss = model.module.energy_force_loss(pred, data)
             else:
                 # Perform forward pass and backward pass under autocast
                 with autocast(enabled=use_tensor_cores, dtype=torch.bfloat16):
