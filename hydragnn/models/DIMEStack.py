@@ -182,9 +182,15 @@ class DIMEStack(Base):
         pos_ki = (
             pos_kj + pos_ji
         )  # It's important to calculate the vectors separately and then add in case of periodic boundary conditions
-        a = (pos_ji * pos_ki).sum(dim=-1)
-        b = torch.cross(pos_ji, pos_ki).norm(dim=-1)
-        angle = torch.atan2(b, a)
+        
+        # Avoid instabilities when using positional gradients by masking the angles when a distance is too close to zero
+        eps = 1e-3
+        valid_mask = ~((pos_ji.norm(dim=-1) < eps) | (pos_kj.norm(dim=-1) < eps) | (pos_ki.norm(dim=-1) < eps))  # Check if any relative vectors are too small
+        angle = torch.zeros(pos_ji.size(0), device=pos_ji.device)
+        a = (pos_ji[valid_mask] * pos_ki[valid_mask]).sum(dim=-1)
+        b = torch.cross(pos_ji[valid_mask], pos_ki[valid_mask], dim=-1).norm(dim=-1)
+        valid_angle = torch.atan2(b, a)
+        angle[valid_mask] = valid_angle
 
         rbf = self.rbf(edge_dist.squeeze())
         sbf = self.sbf(edge_dist.squeeze(), angle, idx_kj)
