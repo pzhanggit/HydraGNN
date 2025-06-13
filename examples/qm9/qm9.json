@@ -13,8 +13,8 @@
             "periodic_boundary_conditions": false,
             "pe_dim": 2,
             "global_attn_heads": 8,
-            "hidden_dim": 64,
-            "num_conv_layers": 2,
+            "hidden_dim": 256,
+            "num_conv_layers": 20,
             "int_emb_size": 32,
             "out_emb_size": 16,
             "basis_emb_size": 8,
@@ -30,9 +30,9 @@
             "output_heads": {
                 "graph":{
                     "num_sharedlayers": 2,
-                    "dim_sharedlayers": 5,
+                    "dim_sharedlayers": 500,
                     "num_headlayers": 2,
-                    "dim_headlayers": [50,25]
+                    "dim_headlayers": [500,250]
                 }
             },
             "task_weights": [1.0]
@@ -46,10 +46,10 @@
             "denormalize_output": false
         },
         "Training": {
-            "num_epoch": 2,
+            "num_epoch": 100,
             "perc_train": 0.7,
             "loss_function_type": "mse",
-            "batch_size": 64,
+            "batch_size": 256,
             "continue": 0,
             "startfrom": "existing_model",
             "Optimizer": {

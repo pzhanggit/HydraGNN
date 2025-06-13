@@ -5,6 +5,8 @@ import torch
 import torch_geometric
 from torch_geometric.transforms import AddLaplacianEigenvectorPE
 import argparse
+from mpi4py import MPI
+from hydragnn.utils.model import print_model
 
 # deprecated in torch_geometric 2.0
 try:
@@ -13,8 +15,9 @@ except ImportError:
     from torch_geometric.data import DataLoader
 
 import hydragnn
+import hydragnn.utils.profiling_and_tracing.tracer as tr
 
-num_samples = 1000
+num_samples = 100000
 
 
 # Update each sample prior to loading.
@@ -38,7 +41,7 @@ def qm9_pre_filter(data):
     return data.idx < num_samples
 
 
-def main(mpnn_type=None, global_attn_engine=None, global_attn_type=None):
+def main(mpnn_type=None, global_attn_engine=None, global_attn_type=None, output=None, bf16=False):
     # FIX random seed
     random_state = 0
     torch.manual_seed(random_state)
@@ -72,9 +75,15 @@ def main(mpnn_type=None, global_attn_engine=None, global_attn_type=None):
     # Always initialize for multi-rank training.
     world_size, world_rank = hydragnn.utils.distributed.setup_ddp()
 
-    log_name = f"qm9_test_{mpnn_type}" if mpnn_type else "qm9_test"
+    if output is None:
+        log_name = f"qm9_test_{mpnn_type}" if mpnn_type else "qm9_test"
+    else:
+        log_name = output
     # Enable print to log file.
     hydragnn.utils.print.print_utils.setup_log(log_name)
+    
+    tr.initialize()
+    tr.disable()
 
     # LPE
     transform = AddLaplacianEigenvectorPE(
@@ -110,6 +119,8 @@ def main(mpnn_type=None, global_attn_engine=None, global_attn_type=None):
     )
     model = hydragnn.utils.distributed.get_distributed_model(model, verbosity)
 
+    print_model(model)
+
     learning_rate = config["NeuralNetwork"]["Training"]["Optimizer"]["learning_rate"]
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -131,8 +142,17 @@ def main(mpnn_type=None, global_attn_engine=None, global_attn_type=None):
         config["NeuralNetwork"],
         log_name,
         verbosity,
+        bf16=bf16
     )
+    hydragnn.utils.model.save_model(model, optimizer, log_name)
+    hydragnn.utils.profiling_and_tracing.print_timers(verbosity)
 
+    if tr.has("GPTLTracer"):
+        import gptl4py as gp
+
+        gp.pr_file(os.path.join("logs", log_name, "gp_timing.p%d" % world_rank))
+        gp.pr_summary_file(os.path.join("logs", log_name, "gp_timing.summary"))
+        gp.finalize()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -156,5 +176,16 @@ if __name__ == "__main__":
         default=None,
         help="Specify the global attention type (default: None).",
     )
+    parser.add_argument(
+        "--log",
+        type=str,
+        default=None,
+        help="output log folder name"
+        )
+    parser.add_argument(
+        "--bf16",
+        action="store_true",
+        help="use bf16",
+        )
     args = parser.parse_args()
-    main(mpnn_type=args.mpnn_type)
+    main(mpnn_type=args.mpnn_type, output=args.log, bf16=args.bf16)

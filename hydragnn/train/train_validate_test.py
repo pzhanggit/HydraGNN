@@ -34,7 +34,22 @@ import pickle
 import hydragnn.utils.profiling_and_tracing.tracer as tr
 import time
 from mpi4py import MPI
+from contextlib import nullcontext
 
+
+use_tensor_cores =(
+    torch.cuda.is_available() and torch.cuda.get_device_properties(0).major >= 7
+)
+
+scaler=torch.amp.GradScaler('cuda', enabled=use_tensor_cores)
+
+def get_autocast(bf16):
+    if not bf16 or not use_tensor_cores:
+        return nullcontext()
+    if use_tensor_cores:
+        return torch.autocast(device_type="cuda", dtype=torch.bfloat16)
+    else:
+        raise RuntimeError("bf16 not supported")
 
 def get_nbatch(loader):
     ## calculate numbrer of batches for a given loader
@@ -65,6 +80,7 @@ def train_validate_test(
     create_plots=False,
     use_deepspeed=False,
     compute_grad_energy=False,
+    bf16=False
 ):
     num_epoch = config["Training"]["num_epoch"]
     EarlyStop = (
@@ -149,6 +165,8 @@ def train_validate_test(
     timer = Timer("train_validate_test")
     timer.start()
 
+    autocast_context = get_autocast(bf16=bf16)
+
     epoch_start = config["Training"].get("epoch_start", 0)
     for epoch in range(epoch_start, num_epoch):
         os.environ["HYDRAGNN_EPOCH"] = str(epoch)
@@ -170,6 +188,7 @@ def train_validate_test(
                 profiler=prof,
                 use_deepspeed=use_deepspeed,
                 compute_grad_energy=compute_grad_energy,
+                autocast_context = autocast_context 
             )
             tr.stop("train")
             tr.disable()
@@ -185,6 +204,7 @@ def train_validate_test(
             verbosity,
             reduce_ranks=True,
             compute_grad_energy=compute_grad_energy,
+            autocast_context = autocast_context
         )
         test_loss, test_taskserr, true_values, predicted_values = test(
             test_loader,
@@ -193,6 +213,7 @@ def train_validate_test(
             reduce_ranks=True,
             return_samples=plot_hist_solution,
             compute_grad_energy=compute_grad_energy,
+            autocast_context = autocast_context
         )
         scheduler.step(val_loss)
         if writer is not None:
@@ -456,6 +477,7 @@ def train(
     profiler=None,
     use_deepspeed=False,
     compute_grad_energy=False,
+    autocast_context=nullcontext()
 ):
     if profiler is None:
         profiler = Profiler()
@@ -517,16 +539,12 @@ def train(
             if compute_grad_energy:  # for force and energy prediction
                 data.pos.requires_grad = True
                 # Perform forward pass and backward pass under autocast
-                with autocast(enabled=use_tensor_cores, dtype=torch.bfloat16):
-                    # with autocast(enabled=use_tensor_cores, dtype=torch.float16):
-                    # with autocast(enabled=use_tensor_cores, dtype=torch.float32):
+                with autocast_context:
                     pred = model(data)
                     loss, tasks_loss = model.module.energy_force_loss(pred, data)
             else:
                 # Perform forward pass and backward pass under autocast
-                with autocast(enabled=use_tensor_cores, dtype=torch.bfloat16):
-                #with autocast(enabled=use_tensor_cores, dtype=torch.float16):
-                #with autocast(enabled=use_tensor_cores, dtype=torch.float32):
+                with autocast_context:
                     pred = model(data)
                     loss, tasks_loss = model.module.loss(pred, data.y, head_index)
             if trace_level > 0:
@@ -539,19 +557,24 @@ def train(
             if use_deepspeed:
                 model.backward(loss)
             else:
-                loss.backward()
+                scaler.scale(loss).backward()
+                #loss.backward()
             if trace_level > 0:
                 tr.start("backward_sync", **syncopt)
                 MPI.COMM_WORLD.Barrier()
                 tr.stop("backward_sync")
         tr.stop("backward", **syncopt)
         tr.start("opt_step", **syncopt)
-        # print_peak_memory(verbosity, "Max memory allocated before optimizer step")
+        print_distributed(verbosity, f"Memory used {torch.cuda.max_memory_allocated()/1e9} GB, before opt")
+        #print_peak_memory(verbosity, "Max memory allocated before optimizer step")
         if use_deepspeed:
             model.step()
         else:
-            opt.step()
-        # print_peak_memory(verbosity, "Max memory allocated after optimizer step")
+            scaler.step(opt)
+            scaler.update()
+            #opt.step()
+        print_distributed(verbosity, f"Memory used {torch.cuda.max_memory_allocated()/1e9} GB, after opt")
+        #print_peak_memory(verbosity, "Max memory allocated after optimizer step")
         tr.stop("opt_step", **syncopt)
         profiler.step()
         with torch.no_grad():
@@ -576,8 +599,7 @@ def train(
 
 
 @torch.no_grad()
-def validate(loader, model, verbosity, reduce_ranks=True, compute_grad_energy=False):
-
+def validate(loader, model, verbosity, reduce_ranks=True, compute_grad_energy=False, autocast_context=nullcontext()):
     total_error = torch.tensor(0.0, device=get_device())
     tasks_error = torch.zeros(model.module.num_heads, device=get_device())
     num_samples_local = 0
@@ -603,11 +625,13 @@ def validate(loader, model, verbosity, reduce_ranks=True, compute_grad_energy=Fa
         if compute_grad_energy:  # for force and energy prediction
             with torch.enable_grad():
                 data.pos.requires_grad = True
-                pred = model(data)
-                error, tasks_loss = model.module.energy_force_loss(pred, data)
+                with autocast_context:
+                    pred = model(data)
+                    error, tasks_loss = model.module.energy_force_loss(pred, data)
         else:
-            pred = model(data)
-            error, tasks_loss = model.module.loss(pred, data.y, head_index)
+            with autocast_context:
+                pred = model(data)
+                error, tasks_loss = model.module.loss(pred, data.y, head_index)
         total_error += error * data.num_graphs
         num_samples_local += data.num_graphs
         for itask in range(len(tasks_loss)):
@@ -633,6 +657,7 @@ def test(
     reduce_ranks=True,
     return_samples=True,
     compute_grad_energy=False,
+    autocast_context=nullcontext()
 ):
 
     total_error = torch.tensor(0.0, device=get_device())
@@ -663,11 +688,13 @@ def test(
         if compute_grad_energy:  # for force and energy prediction
             with torch.enable_grad():
                 data.pos.requires_grad = True
-                pred = model(data)
-                error, tasks_loss = model.module.energy_force_loss(pred, data)
+                with autocast_context:
+                    pred = model(data)
+                    error, tasks_loss = model.module.energy_force_loss(pred, data)
         else:
-            pred = model(data)
-            error, tasks_loss = model.module.loss(pred, data.y, head_index)
+            with autocast_context:
+                pred = model(data)
+                error, tasks_loss = model.module.loss(pred, data.y, head_index)
         ## FIXME: temporary
         if int(os.getenv("HYDRAGNN_DUMP_TESTDATA", "0")) == 1:
             if model.module.var_output:
