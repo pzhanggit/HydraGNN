@@ -593,25 +593,35 @@ class Base(Module):
         # Initialize loss
         tot_loss = 0
         tasks_loss = []
+        
         # Energies
         node_energy_pred = pred[0]
-        graph_energy_pred = (
-            torch_scatter.scatter_add(node_energy_pred, data.batch, dim=0)
-            .squeeze()
-            .float()
-        )
+        if data.batch is not None:
+            graph_energy_pred = (
+                torch_scatter.scatter_add(node_energy_pred, data.batch, dim=0)
+                .squeeze()
+                .float()
+            )
+            graph_size = (
+                torch_scatter.scatter_add(torch.ones_like(data.batch), data.batch, dim=0)
+                .squeeze()
+                .float()
+            )
+        else:
+            graph_energy_pred = node_energy_pred.sum(dim=0).squeeze().float()
+            graph_size = data.num_nodes.squeeze().float()
         graph_energy_true = data.energy.squeeze().float()
         energy_loss_weight = self.loss_weights[
             0
         ]  # There should only be one loss-weight for energy
         tot_loss += (
-            self.loss_function(graph_energy_pred, graph_energy_true)
+            self.loss_function(graph_energy_pred / graph_size, graph_energy_true / graph_size)
             * energy_loss_weight
         )
         tasks_loss.append(self.loss_function(graph_energy_pred, graph_energy_true))
         # Forces
         forces_true = data.forces.float()
-        forces_pred = torch.autograd.grad(
+        forces_pred = -torch.autograd.grad(
             graph_energy_pred,
             data.pos,
             grad_outputs=torch.ones_like(graph_energy_pred),
@@ -621,12 +631,11 @@ class Base(Module):
         assert (
             forces_pred is not None
         ), "No gradients were found for data.pos. Does your model use positions for prediction?"
-        forces_pred = -forces_pred
         force_loss_weight = (
             energy_loss_weight
             * torch.mean(torch.abs(graph_energy_true))
             / (torch.mean(torch.abs(forces_true)) + 1e-8)
-        )  # Weight force loss and graph energy equally
+        ).clamp_max(1e3)  # Weight force loss and graph energy equally
         tot_loss += (
             self.loss_function(forces_pred, forces_true) * force_loss_weight
         )  # Have force-weight be the complement to energy-weight
